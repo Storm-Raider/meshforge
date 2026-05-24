@@ -1,0 +1,92 @@
+# Week 0 Task B — conda constructor packaging template
+#
+# Usage:
+#   1. Install conda-constructor:
+#        conda install -c conda-forge constructor
+#
+#   2. Validate the environment imports first (run in the conda env):
+#        python -c "import OCC.Core.BRep; import vtk; from PyQt6 import QtWidgets; import gmsh; print('ALL OK')"
+#
+#   3. Build the installer:
+#        constructor .
+#        (run from the directory containing this file)
+#
+#   4. On Windows: a MeshForge-0.1.0-Windows-x86_64.exe is produced
+#      On Linux:   a MeshForge-0.1.0-Linux-x86_64.sh is produced
+#
+# Week 0 validation checklist (Task B):
+#   [ ] conda env created from conda-forge only (no pip)
+#   [ ] python validation line above prints "ALL OK"
+#   [ ] constructor builds without error
+#   [ ] .exe installs on a CLEAN Windows VM (no conda, no Python pre-installed)
+#   [ ] /S silent install works: MeshForge-0.1.0-Windows-x86_64.exe /S
+#   [ ] AV behavior observed (CrowdStrike / Defender may flag DLL extraction)
+#   [ ] Uninstall from Add/Remove Programs works cleanly
+#
+# If ANY of the above fail: stop, diagnose, fix the packaging spec before
+# writing any application code. The installer is the product.
+
+name: MeshForge
+version: 0.1.0
+
+# Installer appearance (NSIS wizard mode — professional install experience)
+# installer_type: exe produces NSIS GUI wizard on Windows (license screen,
+# install path selector, progress bar). This is the required mode for v1 —
+# the default CLI-embedded installer is not acceptable for OEM engineers.
+installer_type: exe
+
+company: MeshForge
+# license_file: LICENSE.txt   # uncomment when LICENSE.txt exists
+
+# Install path defaults — user can override in the NSIS wizard
+# %LOCALAPPDATA% = C:\Users\<user>\AppData\Local\ on Windows
+# This avoids UAC elevation requirements (no admin rights needed)
+default_prefix_domain_user: '%LOCALAPPDATA%\meshforge'
+default_prefix: '%LOCALAPPDATA%\meshforge'
+
+# Silent install support (/S flag for SCCM/Intune deployment)
+# The NSIS exe supports /S natively — no extra configuration needed.
+# Test: MeshForge-0.1.0-Windows-x86_64.exe /S
+# Expected: installs to default_prefix silently, no UI, no prompts.
+
+# Conda channels — conda-forge ONLY
+# No pip, no defaults channel, no mixing. DLL compatibility on Windows
+# requires all packages to use the same MSVC runtime version, which
+# conda-forge enforces. pip packages break this guarantee.
+channels:
+  - conda-forge
+
+# Core dependencies — pin to specific versions for reproducibility
+# Update versions after Week 0 Task B confirms these work together.
+specs:
+  - python=3.11.*
+  - pythonocc-core=7.8.*
+  - vtk=9.3.*
+  - pyqt6=6.7.*
+  - gmsh=4.13.*
+  - numpy=1.26.*
+  - matplotlib=3.9.*    # used in Week 0 Task A histogram; keep for v1 if QualityEngine uses it
+
+# Bundled data files (relative to constructor working directory)
+# bracket_clean.step must be present at this path when running constructor.
+# It will be installed to <install_prefix>/share/meshforge/bracket_clean.step.
+# Application code must locate it via: Path(sys.prefix) / "share" / "meshforge" / "bracket_clean.step"
+extra_files:
+  - ../tests/fixtures/bracket_clean.step: share/meshforge/bracket_clean.step
+
+# Post-install script (optional — uncomment if needed for registry entries etc.)
+# post_install: post_install.bat   # Windows
+# post_install: post_install.sh    # Linux
+
+# Uninstaller: included automatically by NSIS (Windows) — shows in Add/Remove Programs
+# Linux .sh installer: run with --uninstall flag
+
+# AV exception note for IT documentation:
+# conda constructor unpacks 200+ native DLLs into %LOCALAPPDATA%\meshforge\.
+# Endpoint AV tools (CrowdStrike Falcon, Windows Defender) may trigger on
+# this activity. IT teams should add an AV exception for:
+#   Path:     %LOCALAPPDATA%\meshforge\
+#   Vendor:   MeshForge (meshforge.io)
+#   Behavior: conda package extraction of signed DLLs from conda-forge
+#
+# Provide this text verbatim in IT evaluation materials.

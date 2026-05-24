@@ -1,0 +1,48 @@
+from __future__ import annotations
+from PyQt6.QtCore import QThread, pyqtSignal
+
+from meshforge.core.mesh_engine import MeshEngine
+from meshforge.models.geometry_data import GeometryData
+from meshforge.models.mesh_data import MeshData
+
+
+class MeshWorker(QThread):
+    """Thin QThread wrapper around MeshEngine.
+
+    Emits complete(MeshData) on success, failed(str) on error.
+    Cancel behavior: sets cancel_requested; worker completes the current Gmsh
+    run then checks the flag. Caller must check was_cancelled() and discard result.
+    Do NOT call QThread.terminate() — corrupts Gmsh global state.
+    """
+
+    complete = pyqtSignal(object)    # MeshData
+    failed = pyqtSignal(str)         # user-readable error message
+    progress = pyqtSignal(str)       # status text updates ("Meshing…", "Cancelling…")
+
+    def __init__(self, geo: GeometryData, size_factor: float = 1.0, parent=None):
+        super().__init__(parent)
+        self._geo = geo
+        self._size_factor = size_factor
+        self._cancel_requested = False
+
+    def request_cancel(self) -> None:
+        self._cancel_requested = True
+        self.progress.emit("Cancelling… (waiting for Gmsh)")
+
+    def was_cancelled(self) -> bool:
+        return self._cancel_requested
+
+    def run(self) -> None:
+        try:
+            engine = MeshEngine(size_factor=self._size_factor)
+            result = engine.mesh(self._geo)
+
+            if self._cancel_requested:
+                return   # discard result silently
+
+            self.complete.emit(result)
+        except Exception as e:
+            if self._cancel_requested:
+                return
+            log = MeshEngine().classify_error([str(e)])
+            self.failed.emit(log)
