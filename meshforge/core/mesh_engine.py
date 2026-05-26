@@ -97,6 +97,7 @@ class MeshEngine:
     # ------------------------------------------------------------------
 
     def _load_shape(self, geo: GeometryData) -> None:
+        import gmsh
         import tempfile, os
         from OCC.Core.STEPControl import STEPControl_Writer
         from OCC.Core.IFSelect import IFSelect_RetDone
@@ -135,6 +136,7 @@ class MeshEngine:
             os.unlink(tmp_path)
 
     def _set_options(self, geo: GeometryData) -> None:
+        import gmsh
         target_size = geo.default_element_size() * self._size_factor
         gmsh.option.setNumber("Mesh.CharacteristicLengthMin", target_size * 0.5)
         gmsh.option.setNumber("Mesh.CharacteristicLengthMax", target_size * 2.0)
@@ -143,7 +145,7 @@ class MeshEngine:
         gmsh.option.setNumber("Mesh.Algorithm3D", _VOLUME_ALGO)
 
     def _extract_mesh_data(self) -> MeshData:
-        # All node coordinates
+        import gmsh
         node_tags, coords, _ = gmsh.model.mesh.getNodes()
         nodes = np.array(coords, dtype=np.float64).reshape(-1, 3)
         tag_to_idx = {int(t): i for i, t in enumerate(node_tags)}
