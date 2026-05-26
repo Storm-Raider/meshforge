@@ -50,11 +50,16 @@ class QualityWorker(QThread):
             grid.GetCellData().SetScalars(scalars_vtk)
             grid.GetCellData().SetActiveScalars("Jacobian")
 
-            # Extract surface polydata (runs here, not in main thread)
-            geo_filter = vtk.vtkGeometryFilter()
-            geo_filter.SetInputData(grid)
-            geo_filter.Update()
-            surface = geo_filter.GetOutput()
+            # Extract surface as linear triangles.
+            # vtkGeometryFilter on C3D10 (quadratic tetra) produces VTK_QUADRATIC_TRIANGLE
+            # cells which crash vtkRenderingOpenGL2 on some drivers.
+            # vtkDataSetSurfaceFilter with NonlinearSubdivisionLevel=1 subdivides
+            # quadratic faces into linear triangles before handing off to the renderer.
+            surf_filter = vtk.vtkDataSetSurfaceFilter()
+            surf_filter.SetInputData(grid)
+            surf_filter.SetNonlinearSubdivisionLevel(1)
+            surf_filter.Update()
+            surface = surf_filter.GetOutput()
 
             self.scalars_ready.emit(surface, scalars_np)
 

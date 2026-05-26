@@ -272,21 +272,26 @@ class MainWindow(QMainWindow):
         self._log_panel.append(error, "error")
 
     def _on_mesh_complete(self, mesh: MeshData) -> None:
-        if self._mesh_worker and self._mesh_worker.was_cancelled():
-            self._reset_state()
-            return
+        try:
+            if self._mesh_worker and self._mesh_worker.was_cancelled():
+                self._reset_state()
+                return
 
-        self._mesh = mesh
-        self._model_tree.set_mesh(mesh)
-        self._log_panel.append(
-            f"Mesh OK: {mesh.element_count:,} elements, {mesh.node_count:,} nodes"
-        )
+            self._mesh = mesh
+            self._model_tree.set_mesh(mesh)
+            self._log_panel.append(
+                f"Mesh OK: {mesh.element_count:,} elements, {mesh.node_count:,} nodes"
+            )
 
-        self._set_state(_LOADING, "Computing quality…")
-        self._quality_worker = QualityWorker(mesh, parent=self)
-        self._quality_worker.scalars_ready.connect(self._on_quality_ready)
-        self._quality_worker.failed.connect(self._on_quality_failed)
-        self._quality_worker.start()
+            self._set_state(_LOADING, "Computing quality…")
+            self._quality_worker = QualityWorker(mesh, parent=self)
+            self._quality_worker.scalars_ready.connect(self._on_quality_ready)
+            self._quality_worker.failed.connect(self._on_quality_failed)
+            self._quality_worker.start()
+        except Exception as exc:
+            import traceback
+            self._log_panel.append(f"[BUG] _on_mesh_complete crashed: {exc}\n{traceback.format_exc()}", "error")
+            self._set_state(_ERROR, f"Internal error: {exc}")
 
     def _on_mesh_failed(self, error: str, gmsh_log: list) -> None:
         QMessageBox.critical(self, "Meshing Failed", error)
@@ -296,20 +301,25 @@ class MainWindow(QMainWindow):
             self._log_panel.append_gmsh_log(gmsh_log)
 
     def _on_quality_ready(self, surface_polydata, quality_scalars) -> None:
-        import numpy as np
-        self._vtk_viewer.display_mesh(surface_polydata, quality_scalars)
+        try:
+            import numpy as np
+            self._vtk_viewer.display_mesh(surface_polydata, quality_scalars)
 
-        summary = QualityEngine().summary(quality_scalars)
-        self._quality_panel.update_summary(summary)
-        self._model_tree.set_quality(summary)
+            summary = QualityEngine().summary(quality_scalars)
+            self._quality_panel.update_summary(summary)
+            self._model_tree.set_quality(summary)
 
-        state = _SUCCESS if summary["fail"] == 0 else _PARTIAL
-        msg = (
-            f"Mesh ready — {summary['element_count']:,} elements, "
-            f"{summary['pass_pct']:.1f}% pass quality."
-        )
-        self._set_state(state, msg)
-        self._log_panel.append(msg)
+            state = _SUCCESS if summary["fail"] == 0 else _PARTIAL
+            msg = (
+                f"Mesh ready — {summary['element_count']:,} elements, "
+                f"{summary['pass_pct']:.1f}% pass quality."
+            )
+            self._set_state(state, msg)
+            self._log_panel.append(msg)
+        except Exception as exc:
+            import traceback
+            self._log_panel.append(f"[BUG] _on_quality_ready crashed: {exc}\n{traceback.format_exc()}", "error")
+            self._set_state(_ERROR, f"Internal error: {exc}")
 
     def _on_quality_failed(self, error: str) -> None:
         self._log_panel.append(error, "error")

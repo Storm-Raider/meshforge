@@ -1,5 +1,18 @@
 from __future__ import annotations
 import sys
+import faulthandler
+faulthandler.enable()  # print C-level crash traceback to stderr
+
+# Must be set before QApplication is created.
+# Disabling multisampling (setSamples(0)) prevents a crash in
+# vtkRenderingOpenGL2 on Windows when the Qt OpenGL context doesn't
+# support the default MSAA level VTK requests.
+from PyQt6.QtGui import QSurfaceFormat
+_fmt = QSurfaceFormat()
+_fmt.setVersion(3, 2)
+_fmt.setProfile(QSurfaceFormat.OpenGLContextProfile.CoreProfile)
+_fmt.setSamples(0)
+QSurfaceFormat.setDefaultFormat(_fmt)
 
 from PyQt6.QtWidgets import QApplication, QMessageBox
 import vtk

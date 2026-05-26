@@ -44,6 +44,9 @@ class MeshWorker(QThread):
         except Exception as e:
             if self._cancel_requested:
                 return
-            gmsh_log = engine.get_gmsh_log()
+            try:
+                gmsh_log = engine.get_gmsh_log()
+            except Exception:
+                gmsh_log = []
             user_msg = MeshEngine.classify_error(gmsh_log if gmsh_log else [str(e)])
             self.failed.emit(user_msg, gmsh_log)

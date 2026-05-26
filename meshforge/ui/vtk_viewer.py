@@ -2,12 +2,12 @@ from __future__ import annotations
 import numpy as np
 
 import vtk
-from vtk.util.numpy_support import numpy_to_vtk
 
 try:
     from vtkmodules.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 except ImportError:
     from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
+
 
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel
 from PyQt6.QtCore import Qt
@@ -49,6 +49,10 @@ class VtkViewer(QWidget):
         self._renderer.SetBackground(0.15, 0.15, 0.15)
 
         rw = self._vtk_widget.GetRenderWindow()
+        # Disable MSAA and alpha bits — avoids access violation in vtkRenderingOpenGL2
+        # when the Qt6 OpenGL context doesn't expose the default sample/alpha config.
+        rw.SetMultiSamples(0)
+        rw.SetAlphaBitPlanes(0)
         rw.AddRenderer(self._renderer)
         self._vtk_widget.Initialize()
 
@@ -78,12 +82,13 @@ class VtkViewer(QWidget):
         return lut
 
     def display_mesh(self, surface_polydata, quality_scalars: np.ndarray) -> None:
-        """Called from main thread after QualityWorker emits scalars_ready."""
-        scalars_vtk = numpy_to_vtk(quality_scalars, deep=True)
-        scalars_vtk.SetName("Jacobian")
-        surface_polydata.GetCellData().SetScalars(scalars_vtk)
-        surface_polydata.GetCellData().SetActiveScalars("Jacobian")
+        """Called from main thread after QualityWorker emits scalars_ready.
 
+        surface_polydata already carries per-surface-cell Jacobian scalars
+        set by QualityWorker (mapped from the 3D grid).  Do NOT reassign
+        quality_scalars (per-3D-element) here — surface has more cells than
+        3D elements, causing an out-of-bounds read in vtkRenderingOpenGL2.
+        """
         self._mapper.SetInputData(surface_polydata)
         self._mapper.SetScalarRange(0.0, 1.0)
         self._lut.SetTableRange(0.0, 1.0)

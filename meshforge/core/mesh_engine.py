@@ -38,7 +38,21 @@ class MeshEngine:
 
     def _mesh_locked(self, geo: GeometryData) -> MeshData:
         import gmsh
-        gmsh.initialize()
+        import signal as _signal
+        import threading
+
+        # gmsh.initialize() calls signal.signal(SIGINT, ...) which Python only
+        # permits from the main thread.  Stub it out when called from a worker.
+        _in_worker = threading.current_thread() is not threading.main_thread()
+        if _in_worker:
+            _orig_signal = _signal.signal
+            _signal.signal = lambda *a, **kw: None
+        try:
+            gmsh.initialize()
+        finally:
+            if _in_worker:
+                _signal.signal = _orig_signal
+
         gmsh.logger.start()
         gmsh.option.setNumber("General.Terminal", 0)
         gmsh.option.setNumber("General.Verbosity", 3)
