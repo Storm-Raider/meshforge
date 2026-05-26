@@ -1,0 +1,45 @@
+# Changelog
+
+All notable changes to MeshForge are documented here.
+
+---
+
+## v0.1.0 — 2026-05-24
+
+Initial release. Full pipeline from STEP import to C3D10 mesh to Abaqus `.inp` export.
+
+### Added
+
+**Core pipeline**
+- STEP import via pythonocc-core (AP203 and AP214). OCC healing with `BRepBuilderAPI_Sewing` + `ShapeFix_Shape`. Automatic shell→solid promotion via `BRepBuilderAPI_MakeSolid` for open-shell STEP files
+- C3D10 quadratic tetrahedral meshing via Gmsh 4.13. Surface algorithm: Frontal-Delaunay (6). Volume algorithm: HXT (9) — benchmark on 20 production STEP files showed 99.1% pass rate vs 97.1% for Delaunay
+- Scaled Jacobian quality metric using product-of-column-norms formula: `det(J) / (‖col₀‖ × ‖col₁‖ × ‖col₂‖)`. Pass threshold: 0.3. Warn threshold: 0.1. Perfect equilateral tetrahedron scores ≈ 0.707
+- Abaqus `.inp` export (C3D10 element type, 1-based node IDs, `*NODE` + `*ELEMENT` blocks). Export requires a license; geometry + quality review are free
+- Global element size factor control (0.1–5.0×). Default: 1.0 (≈3% of bounding box diagonal, capped at 50% of minimum edge length). `MeshSizeFromCurvature = 12` for automatic refinement at curved surfaces
+
+**UI**
+- PyQt6 main window with state machine (empty → loading → success/partial/error)
+- VTK 9 viewport with blue→red Jacobian color scale. Gray for elements below the quality threshold slider
+- Quality panel: pass/warn/fail element counts and percentages, min/mean/max Jacobian
+- Model tree: surface count, bounding box diagonal, minimum edge length, healing status
+- Log panel: full Gmsh output with error classification
+- Drag-and-drop STEP import onto the viewport
+- "Try with sample geometry" first-run CTA (loads `bracket_clean.step`)
+- Cancel with graceful Gmsh wait (`"Cancelling… (waiting for Gmsh)"`)
+- GPU startup check: detects OpenGL < 3.2 before the window opens, shows error dialog and exits cleanly
+- Help menu: Documentation, Report a Bug, About
+
+**Tests**
+- 32 tests across models, core, and export layers. All passing on Linux (aarch64) and Windows (x86_64)
+- GitHub Actions CI: runs on every push and PR to `main`
+
+### Known limitations
+
+- Single STEP body only — multi-body assemblies are imported as a single merged solid
+- C3D10 elements only — shell and beam elements not supported
+- Cancel waits for current Gmsh operation to finish (up to ~30 s on large geometry). True instant cancel is a v2 item
+- Export tested against CalculiX and Abaqus 2023. Older Abaqus versions (< 6.14) are untested
+
+---
+
+*MeshForge uses [Gmsh](https://gmsh.info) for meshing, [Open CASCADE Technology](https://dev.opencascade.org) for geometry healing, and [VTK](https://vtk.org) for visualization.*
