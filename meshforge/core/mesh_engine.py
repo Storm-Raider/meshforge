@@ -3,8 +3,6 @@ import re
 import threading
 import numpy as np
 
-import gmsh
-
 from meshforge.models.geometry_data import GeometryData
 from meshforge.models.mesh_data import MeshData
 
@@ -38,6 +36,7 @@ class MeshEngine:
             return self._mesh_locked(geo)
 
     def _mesh_locked(self, geo: GeometryData) -> MeshData:
+        import gmsh
         gmsh.initialize()
         gmsh.option.setNumber("General.Terminal", 0)
         gmsh.option.setNumber("General.Verbosity", 1)
@@ -58,6 +57,7 @@ class MeshEngine:
     def get_gmsh_log(self) -> list[str]:
         """Return Gmsh log lines accumulated during the last mesh run."""
         try:
+            import gmsh
             return list(gmsh.logger.get())
         except Exception:
             return []

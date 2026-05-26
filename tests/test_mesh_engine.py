@@ -8,6 +8,12 @@ from meshforge.core.mesh_engine import MeshEngine
 _FIXTURES = Path(__file__).parent / "fixtures"
 _BRACKET = _FIXTURES / "bracket_clean.step"
 
+try:
+    import gmsh as _gmsh
+    _HAS_GMSH = True
+except ImportError:
+    _HAS_GMSH = False
+
 
 @pytest.fixture
 def bracket_geo():
@@ -35,6 +41,7 @@ class TestMeshEngineClassifyError:
 
 
 @pytest.mark.skipif(not _BRACKET.exists(), reason="bracket_clean.step fixture not present")
+@pytest.mark.skipif(not _HAS_GMSH, reason="gmsh Python bindings not available")
 class TestMeshEngineWithFixture:
     def test_mesh_returns_mesh_data(self, bracket_geo):
         from meshforge.models.mesh_data import MeshData
