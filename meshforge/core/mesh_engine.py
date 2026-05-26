@@ -39,8 +39,9 @@ class MeshEngine:
     def _mesh_locked(self, geo: GeometryData) -> MeshData:
         import gmsh
         gmsh.initialize()
+        gmsh.logger.start()
         gmsh.option.setNumber("General.Terminal", 0)
-        gmsh.option.setNumber("General.Verbosity", 1)
+        gmsh.option.setNumber("General.Verbosity", 3)
         gmsh.model.add("meshforge")
 
         try:
