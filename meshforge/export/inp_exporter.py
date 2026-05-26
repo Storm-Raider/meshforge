@@ -1,10 +1,7 @@
 from __future__ import annotations
 import re
-import tempfile
-import os
 from pathlib import Path
 
-import gmsh
 import numpy as np
 
 from meshforge.models.geometry_data import GeometryData
@@ -12,9 +9,9 @@ from meshforge.models.mesh_data import MeshData
 
 
 class InpExporter:
-    """Exports MeshData to Abaqus .inp via Gmsh's built-in writer + CalculiX validator.
+    """Exports MeshData to Abaqus .inp format.
 
-    No Qt imports.
+    No Qt imports. Writes directly from MeshData — no re-meshing.
     """
 
     def export(self, mesh: MeshData, geo: GeometryData, dest_path: str | Path) -> list[str]:
@@ -25,8 +22,6 @@ class InpExporter:
         dest_path = Path(dest_path)
         self._check_writable(dest_path)
 
-        # Re-mesh via Gmsh to produce the .inp — Gmsh's own writer handles
-        # all keyword formatting. We then validate the output file.
         inp_text = self._generate_inp(mesh, geo)
 
         try:
@@ -45,12 +40,12 @@ class InpExporter:
     # ------------------------------------------------------------------
 
     def _check_writable(self, path: Path) -> None:
+        import os
         parent = path.parent
         if not parent.exists():
             raise RuntimeError(
                 f"Export failed: directory {parent} does not exist."
             )
-        # Test write access
         test = path.parent / f".meshforge_write_test_{os.getpid()}"
         try:
             test.touch()
@@ -62,73 +57,52 @@ class InpExporter:
             )
 
     def _generate_inp(self, mesh: MeshData, geo: GeometryData) -> str:
-        """Use Gmsh to write the .inp, capturing output via a temp file."""
-        import threading
+        """Write Abaqus .inp directly from MeshData — no re-meshing.
 
-        with tempfile.NamedTemporaryFile(suffix=".step", delete=False) as step_f:
-            step_path = step_f.name
-        with tempfile.NamedTemporaryFile(suffix=".inp", delete=False) as inp_f:
-            inp_path = inp_f.name
+        Exports the exact mesh that was quality-checked and rendered.
+        """
+        lines: list[str] = []
+        lines.append("*Heading")
+        lines.append(" MeshForge export")
 
-        try:
-            # Write OCC shape to temp STEP
-            from OCC.Core.STEPControl import STEPControl_Writer
-            from OCC.Core.IFSelect import IFSelect_RetDone
-            writer = STEPControl_Writer()
-            writer.Transfer(geo.occ_shape, 0)
-            writer.Write(step_path)
+        lines.append("*NODE")
+        for i, (x, y, z) in enumerate(mesh.nodes, 1):
+            lines.append(f"{i}, {x:.10g}, {y:.10g}, {z:.10g}")
 
-            # Re-mesh and export with Gmsh
-            gmsh.initialize()
-            gmsh.option.setNumber("General.Terminal", 0)
-            gmsh.model.add("meshforge_export")
-            gmsh.model.occ.importShapes(step_path)
-            gmsh.model.occ.synchronize()
+        # C3D10: 10-node quadratic tet — connectivity is (E, 10) int64, 0-based
+        lines.append("*ELEMENT, type=C3D10, ELSET=Solid")
+        for i, conn in enumerate(mesh.connectivity, 1):
+            node_ids = ", ".join(str(int(n) + 1) for n in conn)
+            lines.append(f"{i}, {node_ids}")
 
-            # Apply same mesh parameters used during original meshing
-            target_size = geo.default_element_size()
-            gmsh.option.setNumber("Mesh.CharacteristicLengthMin", target_size * 0.5)
-            gmsh.option.setNumber("Mesh.CharacteristicLengthMax", target_size * 2.0)
-            gmsh.option.setNumber("Mesh.MeshSizeFromCurvature", 12)
-            gmsh.option.setNumber("Mesh.Algorithm", 6)
-            gmsh.option.setNumber("Mesh.Algorithm3D", 9)
+        lines.append("*ELSET, ELSET=Solid, GENERATE")
+        lines.append(f"1, {mesh.element_count}")
 
-            gmsh.model.mesh.generate(3)
-            gmsh.model.mesh.setOrder(2)
-            gmsh.write(inp_path)
-            gmsh.finalize()
+        lines.append("*NSET, NSET=AllNodes, GENERATE")
+        lines.append(f"1, {mesh.node_count}")
 
-            return Path(inp_path).read_text(encoding="ascii")
-        finally:
-            for p in (step_path, inp_path):
-                try:
-                    os.unlink(p)
-                except OSError:
-                    pass
+        return "\n".join(lines) + "\n"
 
     def _validate(self, inp_text: str, mesh: MeshData) -> list[str]:
         """Run CalculiX-compatibility checks. Returns warning strings."""
         warnings = []
 
-        # Check *ELEMENT block exists
-        if "*ELEMENT" not in inp_text.upper():
-            warnings.append("No *ELEMENT block found in exported .inp")
-
-        # Check *NODE block exists
         if "*NODE" not in inp_text.upper():
             warnings.append("No *NODE block found in exported .inp")
 
-        # Check element type is C3D10 (second-order tet)
+        if "*ELEMENT" not in inp_text.upper():
+            warnings.append("No *ELEMENT block found in exported .inp")
+
+        if not re.search(r"TYPE\s*=\s*C3D10\b", inp_text, re.IGNORECASE):
+            warnings.append(
+                "Export does not contain C3D10 elements — structural FEA requires "
+                "quadratic tetrahedral elements."
+            )
+
         if re.search(r"TYPE\s*=\s*C3D4\b", inp_text, re.IGNORECASE):
             warnings.append(
                 "Export contains C3D4 first-order elements. "
-                "MeshForge should export C3D10 only — check setOrder(2) was applied."
+                "MeshForge should export C3D10 only."
             )
-
-        # Check for excessive line length (Abaqus limit: 80 chars per continuation line)
-        for i, line in enumerate(inp_text.splitlines(), 1):
-            if len(line) > 256:
-                warnings.append(f"Line {i} exceeds 256 characters — may cause Abaqus parse errors.")
-                break  # report first occurrence only
 
         return warnings
