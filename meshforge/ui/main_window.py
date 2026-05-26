@@ -33,8 +33,8 @@ _PARTIAL = "partial"
 _ERROR = "error"
 
 _SAMPLE_STEP = Path(__file__).parent.parent.parent / "tests" / "fixtures" / "bracket_clean.step"
-_GITHUB_ISSUES = "https://github.com/meshforge/meshforge/issues/new"
-_DOCS_URL = "https://meshforge.io/docs"
+_GITHUB_ISSUES = "https://github.com/Storm-Raider/meshforge/issues/new"
+_DOCS_URL = "https://github.com/Storm-Raider/meshforge/blob/main/docs/getting-started.md"
 
 
 class MainWindow(QMainWindow):
