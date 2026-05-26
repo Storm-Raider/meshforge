@@ -288,10 +288,12 @@ class MainWindow(QMainWindow):
         self._quality_worker.failed.connect(self._on_quality_failed)
         self._quality_worker.start()
 
-    def _on_mesh_failed(self, error: str) -> None:
+    def _on_mesh_failed(self, error: str, gmsh_log: list) -> None:
         QMessageBox.critical(self, "Meshing Failed", error)
         self._set_state(_ERROR, "Meshing failed.")
         self._log_panel.append(error, "error")
+        if gmsh_log:
+            self._log_panel.append_gmsh_log(gmsh_log)
 
     def _on_quality_ready(self, surface_polydata, quality_scalars) -> None:
         import numpy as np

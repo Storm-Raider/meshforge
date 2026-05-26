@@ -28,7 +28,8 @@ class MeshEngine:
     """
 
     def __init__(self, size_factor: float = 1.0):
-        self._size_factor = size_factor  # multiplier on the default element size
+        self._size_factor = size_factor
+        self._last_gmsh_log: list[str] = []
 
     def mesh(self, geo: GeometryData) -> MeshData:
         """Run full surface + volume mesh. Returns MeshData with no quality_scalars."""
@@ -49,18 +50,19 @@ class MeshEngine:
             gmsh.model.mesh.setOrder(2)
             return self._extract_mesh_data()
         finally:
+            # Capture log before finalize — logger is unavailable after finalize()
+            try:
+                self._last_gmsh_log = list(gmsh.logger.get())
+            except Exception:
+                self._last_gmsh_log = []
             try:
                 gmsh.finalize()
             except Exception:
                 pass
 
     def get_gmsh_log(self) -> list[str]:
-        """Return Gmsh log lines accumulated during the last mesh run."""
-        try:
-            import gmsh
-            return list(gmsh.logger.get())
-        except Exception:
-            return []
+        """Return Gmsh log lines from the last mesh run."""
+        return list(self._last_gmsh_log)
 
     @staticmethod
     def classify_error(log_lines: list[str]) -> str:

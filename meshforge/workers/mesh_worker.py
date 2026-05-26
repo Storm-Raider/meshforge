@@ -16,7 +16,7 @@ class MeshWorker(QThread):
     """
 
     complete = pyqtSignal(object)    # MeshData
-    failed = pyqtSignal(str)         # user-readable error message
+    failed = pyqtSignal(str, list)   # user-readable error message + raw gmsh log lines
     progress = pyqtSignal(str)       # status text updates ("Meshing…", "Cancelling…")
 
     def __init__(self, geo: GeometryData, size_factor: float = 1.0, parent=None):
@@ -44,5 +44,6 @@ class MeshWorker(QThread):
         except Exception as e:
             if self._cancel_requested:
                 return
-            log = MeshEngine().classify_error([str(e)])
-            self.failed.emit(log)
+            gmsh_log = engine.get_gmsh_log()
+            user_msg = MeshEngine.classify_error(gmsh_log if gmsh_log else [str(e)])
+            self.failed.emit(user_msg, gmsh_log)
