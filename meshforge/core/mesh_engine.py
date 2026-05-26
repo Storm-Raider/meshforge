@@ -12,9 +12,9 @@ VTK_QUADRATIC_TETRA = 24
 # Surface meshing: Frontal-Delaunay (locked choice from design doc)
 _SURFACE_ALGO = 6
 
-# Volume meshing: HXT (Algorithm3D=9) — confirmed winner from Week 0 benchmark.
-# Update to 1 (Delaunay) if production geometry shows HXT failures.
-_VOLUME_ALGO = 9
+# Volume meshing: Delaunay (Algorithm3D=1).  HXT (9) produced PLC errors on
+# multi-body STEP assemblies; Delaunay is more robust for production geometry.
+_VOLUME_ALGO = 1
 
 _GMSH_LOCK = threading.Lock()
 
@@ -93,6 +93,13 @@ class MeshEngine:
                 "Try increasing the global element size factor."
             )
 
+        if "plc error" in log_text or "segment and a facet intersect" in log_text:
+            return (
+                "Meshing failed: surface mesh self-intersection detected. "
+                "This often occurs with multi-body assemblies whose parts touch or overlap. "
+                "Try increasing the element size factor to improve surface mesh quality."
+            )
+
         return "Meshing failed. See the log panel for details."
 
     # ------------------------------------------------------------------
@@ -104,24 +111,43 @@ class MeshEngine:
         import tempfile, os
         from OCC.Core.STEPControl import STEPControl_Writer
         from OCC.Core.IFSelect import IFSelect_RetDone
-        from OCC.Core.TopAbs import TopAbs_SOLID, TopAbs_SHELL
+        from OCC.Core.TopAbs import TopAbs_SHELL, TopAbs_COMPOUND
         from OCC.Core.BRep import BRep_Builder
         from OCC.Core.TopoDS import TopoDS_Compound
         from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeSolid
+        from OCC.Core.TopExp import TopExp_Explorer
 
         shape = geo.occ_shape
 
-        # If healing returned a shell rather than a solid, attempt to close it.
-        # BRepBuilderAPI_MakeSolid wraps shells into a solid for volume meshing.
+        # Promote shells to solids so Gmsh can produce closed 3D volumes.
+        # Handles two cases:
+        #  - Top-level shell (e.g. healed single-body STEP)
+        #  - Compound of shells (e.g. multi-body assembly STEP with no solid wrapper)
+        def _shell_to_solid(shell):
+            maker = BRepBuilderAPI_MakeSolid()
+            maker.Add(shell)
+            maker.Build()
+            return maker.Solid() if maker.IsDone() else shell
+
         if shape.ShapeType() == TopAbs_SHELL:
             try:
-                maker = BRepBuilderAPI_MakeSolid()
-                maker.Add(shape)
-                maker.Build()
-                if maker.IsDone():
-                    shape = maker.Solid()
+                shape = _shell_to_solid(shape)
             except Exception:
-                pass  # fall through with original shell — Gmsh may still mesh it
+                pass
+
+        elif shape.ShapeType() == TopAbs_COMPOUND:
+            exp = TopExp_Explorer(shape, TopAbs_SHELL)
+            if exp.More():
+                builder = BRep_Builder()
+                compound = TopoDS_Compound()
+                builder.MakeCompound(compound)
+                while exp.More():
+                    try:
+                        builder.Add(compound, _shell_to_solid(exp.Current()))
+                    except Exception:
+                        builder.Add(compound, exp.Current())
+                    exp.Next()
+                shape = compound
 
         with tempfile.NamedTemporaryFile(suffix=".step", delete=False) as f:
             tmp_path = f.name
@@ -135,6 +161,14 @@ class MeshEngine:
 
             gmsh.model.occ.importShapes(tmp_path)
             gmsh.model.occ.synchronize()
+
+            # Multi-body assemblies produce separate volumes whose shared/overlapping
+            # boundaries cause PLC errors during volume meshing.  Fragment splits them
+            # into conforming sub-volumes with shared interfaces.
+            vols = gmsh.model.occ.getEntities(3)
+            if len(vols) > 1:
+                gmsh.model.occ.fragment(vols, [])
+                gmsh.model.occ.synchronize()
         finally:
             os.unlink(tmp_path)
 
@@ -143,7 +177,6 @@ class MeshEngine:
         target_size = geo.default_element_size() * self._size_factor
         gmsh.option.setNumber("Mesh.CharacteristicLengthMin", target_size * 0.5)
         gmsh.option.setNumber("Mesh.CharacteristicLengthMax", target_size * 2.0)
-        gmsh.option.setNumber("Mesh.MeshSizeFromCurvature", 12)
         gmsh.option.setNumber("Mesh.Algorithm", _SURFACE_ALGO)
         gmsh.option.setNumber("Mesh.Algorithm3D", _VOLUME_ALGO)
 

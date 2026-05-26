@@ -20,5 +20,12 @@ class GeometryData:
         return self.healing_status.startswith("ok") or self.healing_status.startswith("warn")
 
     def default_element_size(self) -> float:
-        """MeshForge default: min(3% bbox diagonal, 0.5 × min edge length)."""
-        return min(0.03 * self.bounding_box_diagonal, 0.5 * self.min_edge_length)
+        """Target element size based on overall part scale.
+
+        3% of bbox diagonal, capped below by 0.5% of bbox so a single tiny
+        feature (thin thread, small chamfer) cannot force micro-elements
+        across the entire model.  MeshSizeFromCurvature handles local
+        refinement in curved areas automatically.
+        """
+        bbox = self.bounding_box_diagonal
+        return min(0.03 * bbox, max(0.5 * self.min_edge_length, 0.005 * bbox))
