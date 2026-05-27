@@ -30,6 +30,43 @@ class MeshEngine:
         with _GMSH_LOCK:
             return self._mesh_locked(geo)
 
+    def mesh_from_step(self, step_path: str, default_element_size: float) -> MeshData:
+        """Gmsh-only meshing from an already-written STEP file.
+
+        Intended for the subprocess worker where this IS the main thread —
+        no lock or signal stubbing needed.
+        """
+        import gmsh
+
+        gmsh.initialize()
+        gmsh.logger.start()
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.option.setNumber("General.Verbosity", 3)
+        gmsh.model.add("meshforge")
+
+        try:
+            gmsh.model.occ.importShapes(step_path)
+            gmsh.model.occ.synchronize()
+
+            vols = gmsh.model.occ.getEntities(3)
+            if len(vols) > 1:
+                gmsh.model.occ.fragment(vols, [])
+                gmsh.model.occ.synchronize()
+
+            self._set_options(default_element_size)
+            gmsh.model.mesh.generate(3)
+            gmsh.model.mesh.setOrder(2)
+            return self._extract_mesh_data()
+        finally:
+            try:
+                self._last_gmsh_log = list(gmsh.logger.get())
+            except Exception:
+                self._last_gmsh_log = []
+            try:
+                gmsh.finalize()
+            except Exception:
+                pass
+
     def _mesh_locked(self, geo: GeometryData) -> MeshData:
         import gmsh
         import signal as _signal
@@ -54,7 +91,7 @@ class MeshEngine:
 
         try:
             self._load_shape(geo)
-            self._set_options(geo)
+            self._set_options(geo.default_element_size())
             gmsh.model.mesh.generate(3)
             gmsh.model.mesh.setOrder(2)
             return self._extract_mesh_data()
@@ -180,10 +217,10 @@ class MeshEngine:
         finally:
             os.unlink(tmp_path)
 
-    def _set_options(self, geo: GeometryData) -> None:
+    def _set_options(self, default_element_size: float) -> None:
         import gmsh
         p = self._params
-        target_size = geo.default_element_size() * p.size_factor
+        target_size = default_element_size * p.size_factor
         min_size = p.min_size if p.min_size is not None else target_size * 0.5
         max_size = p.max_size if p.max_size is not None else target_size * 2.0
         gmsh.option.setNumber("Mesh.CharacteristicLengthMin", min_size)
