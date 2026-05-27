@@ -93,6 +93,7 @@ class MainWindow(QMainWindow):
 
         self._quality_panel = QualityPanel()
         self._quality_panel.threshold_changed.connect(self._vtk_viewer.set_threshold)
+        self._quality_panel.isolate_changed.connect(self._vtk_viewer.set_isolate_failures)
         splitter.addWidget(self._quality_panel)
 
         splitter.setStretchFactor(0, 0)
@@ -324,10 +325,10 @@ class MainWindow(QMainWindow):
         if gmsh_log:
             self._log_panel.append_gmsh_log(gmsh_log)
 
-    def _on_quality_ready(self, surface_polydata, quality_scalars) -> None:
+    def _on_quality_ready(self, surface_polydata, quality_scalars, grid) -> None:
         try:
             import numpy as np
-            self._vtk_viewer.display_mesh(surface_polydata, quality_scalars)
+            self._vtk_viewer.display_mesh(surface_polydata, quality_scalars, grid)
 
             summary = QualityEngine().summary(quality_scalars)
             self._quality_panel.update_summary(summary)

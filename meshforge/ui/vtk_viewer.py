@@ -68,6 +68,34 @@ class VtkViewer(QWidget):
         self._actor.SetVisibility(False)
         self._renderer.AddActor(self._actor)
 
+        # Isolate pipeline: 3D grid → threshold (≤0.3) → surface extract → actor
+        self._grid = None
+        self._isolate_threshold = vtk.vtkThreshold()
+        self._isolate_threshold.SetInputArrayToProcess(
+            0, 0, 0, vtk.vtkDataObject.FIELD_ASSOCIATION_CELLS, "Jacobian"
+        )
+        # Keep cells where Jacobian ≤ 0.3 (non-passing: warn + fail)
+        self._isolate_threshold.SetLowerThreshold(0.3)
+        self._isolate_threshold.SetThresholdFunction(
+            vtk.vtkThreshold.THRESHOLD_LOWER
+        )
+
+        self._isolate_surf = vtk.vtkDataSetSurfaceFilter()
+        self._isolate_surf.SetInputConnection(self._isolate_threshold.GetOutputPort())
+        self._isolate_surf.SetNonlinearSubdivisionLevel(1)
+
+        self._isolate_mapper = vtk.vtkPolyDataMapper()
+        self._isolate_mapper.SetInputConnection(self._isolate_surf.GetOutputPort())
+        self._isolate_mapper.SetLookupTable(self._lut)
+        self._isolate_mapper.SetScalarModeToUseCellData()
+        self._isolate_mapper.ScalarVisibilityOn()
+        self._isolate_mapper.SetScalarRange(0.0, 1.0)
+
+        self._isolate_actor = vtk.vtkActor()
+        self._isolate_actor.SetMapper(self._isolate_mapper)
+        self._isolate_actor.SetVisibility(False)
+        self._renderer.AddActor(self._isolate_actor)
+
         style = vtk.vtkInteractorStyleTrackballCamera()
         self._vtk_widget.GetRenderWindow().GetInteractor().SetInteractorStyle(style)
 
@@ -81,7 +109,7 @@ class VtkViewer(QWidget):
         lut.Build()
         return lut
 
-    def display_mesh(self, surface_polydata, quality_scalars: np.ndarray) -> None:
+    def display_mesh(self, surface_polydata, quality_scalars: np.ndarray, grid) -> None:
         """Called from main thread after QualityWorker emits scalars_ready.
 
         surface_polydata already carries per-surface-cell Jacobian scalars
@@ -89,10 +117,15 @@ class VtkViewer(QWidget):
         quality_scalars (per-3D-element) here — surface has more cells than
         3D elements, causing an out-of-bounds read in vtkRenderingOpenGL2.
         """
+        self._grid = grid
+        self._isolate_threshold.SetInputData(grid)
+
+        # Reset to normal view; isolate toggle restores itself via set_isolate_failures
         self._mapper.SetInputData(surface_polydata)
         self._mapper.SetScalarRange(0.0, 1.0)
         self._lut.SetTableRange(0.0, 1.0)
         self._actor.SetVisibility(True)
+        self._isolate_actor.SetVisibility(False)
         self._renderer.ResetCamera()
 
         self._empty_label.hide()
@@ -103,10 +136,23 @@ class VtkViewer(QWidget):
         self._lut.SetTableRange(lo, hi)
         self._lut.Build()
         self._mapper.SetScalarRange(lo, hi)
+        self._isolate_mapper.SetScalarRange(lo, hi)
+        self._vtk_widget.GetRenderWindow().Render()
+
+    def set_isolate_failures(self, enabled: bool) -> None:
+        """Toggle geometric isolation of non-passing elements (Jacobian ≤ 0.3)."""
+        if enabled and self._grid is not None:
+            self._actor.SetVisibility(False)
+            self._isolate_actor.SetVisibility(True)
+        else:
+            self._actor.SetVisibility(self._grid is not None)
+            self._isolate_actor.SetVisibility(False)
         self._vtk_widget.GetRenderWindow().Render()
 
     def clear(self) -> None:
+        self._grid = None
         self._actor.SetVisibility(False)
+        self._isolate_actor.SetVisibility(False)
         self._renderer.ResetCamera()
         self._vtk_widget.GetRenderWindow().Render()
         self._empty_label.show()

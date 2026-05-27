@@ -2,7 +2,7 @@ from __future__ import annotations
 import numpy as np
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider,
-    QFrame, QSizePolicy, QToolTip,
+    QFrame, QSizePolicy, QToolTip, QCheckBox,
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
@@ -24,6 +24,7 @@ class QualityPanel(QWidget):
     """
 
     threshold_changed = pyqtSignal(float, float)
+    isolate_changed = pyqtSignal(bool)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -87,6 +88,16 @@ class QualityPanel(QWidget):
         scale_row.addWidget(QLabel("1"))
         layout.addLayout(scale_row)
 
+        # Isolate non-passing elements in the 3D viewport
+        self._isolate_cb = QCheckBox("Isolate non-passing (Jac ≤ 0.3)")
+        self._isolate_cb.setToolTip(
+            "Show only elements with Jacobian ≤ 0.3 in the 3D view.\n"
+            "Useful for locating buried failures inside solid geometry."
+        )
+        self._isolate_cb.setEnabled(False)
+        self._isolate_cb.toggled.connect(self.isolate_changed)
+        layout.addWidget(self._isolate_cb)
+
         layout.addStretch()
 
     def _stat_row(self, parent_layout, label_text: str, color: str) -> QLabel:
@@ -119,6 +130,7 @@ class QualityPanel(QWidget):
         self._min_label.setText(f"{summary['min']:.3f}")
         self._mean_label.setText(f"{summary['mean']:.3f}")
         self._slider.setEnabled(True)
+        self._isolate_cb.setEnabled(True)
 
     def set_empty(self) -> None:
         for lbl in (self._pass_label, self._warn_label, self._fail_label,
@@ -127,3 +139,5 @@ class QualityPanel(QWidget):
         self._slider.setValue(0)
         self._slider.setEnabled(False)
         self._threshold_value_label.setText("0.00")
+        self._isolate_cb.setChecked(False)
+        self._isolate_cb.setEnabled(False)

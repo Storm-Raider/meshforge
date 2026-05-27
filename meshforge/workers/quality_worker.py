@@ -13,7 +13,7 @@ class QualityWorker(QThread):
     The main thread calls mapper.SetInputData / SetTableRange / Render only.
     """
 
-    scalars_ready = pyqtSignal(object, object)  # (vtkPolyData, np.ndarray float32)
+    scalars_ready = pyqtSignal(object, object, object)  # (vtkPolyData, np.ndarray float32, vtkUnstructuredGrid)
     failed = pyqtSignal(str)
 
     def __init__(self, mesh: MeshData, parent=None):
@@ -61,7 +61,7 @@ class QualityWorker(QThread):
             surf_filter.Update()
             surface = surf_filter.GetOutput()
 
-            self.scalars_ready.emit(surface, scalars_np)
+            self.scalars_ready.emit(surface, scalars_np, grid)
 
         except Exception as e:
             self.failed.emit(f"Quality computation failed: {e}")
