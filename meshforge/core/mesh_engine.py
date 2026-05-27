@@ -5,16 +5,10 @@ import numpy as np
 
 from meshforge.models.geometry_data import GeometryData
 from meshforge.models.mesh_data import MeshData
+from meshforge.models.mesh_params import MeshParams
 
 # VTK element type for 10-node quadratic tetrahedron (C3D10)
 VTK_QUADRATIC_TETRA = 24
-
-# Surface meshing: Frontal-Delaunay (locked choice from design doc)
-_SURFACE_ALGO = 6
-
-# Volume meshing: Delaunay (Algorithm3D=1).  HXT (9) produced PLC errors on
-# multi-body STEP assemblies; Delaunay is more robust for production geometry.
-_VOLUME_ALGO = 1
 
 _GMSH_LOCK = threading.Lock()
 
@@ -27,8 +21,8 @@ class MeshEngine:
     after this returns, and discarding the result if set.
     """
 
-    def __init__(self, size_factor: float = 1.0):
-        self._size_factor = size_factor
+    def __init__(self, params: MeshParams | None = None):
+        self._params = params or MeshParams()
         self._last_gmsh_log: list[str] = []
 
     def mesh(self, geo: GeometryData) -> MeshData:
@@ -188,11 +182,15 @@ class MeshEngine:
 
     def _set_options(self, geo: GeometryData) -> None:
         import gmsh
-        target_size = geo.default_element_size() * self._size_factor
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMin", target_size * 0.5)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", target_size * 2.0)
-        gmsh.option.setNumber("Mesh.Algorithm", _SURFACE_ALGO)
-        gmsh.option.setNumber("Mesh.Algorithm3D", _VOLUME_ALGO)
+        p = self._params
+        target_size = geo.default_element_size() * p.size_factor
+        min_size = p.min_size if p.min_size is not None else target_size * 0.5
+        max_size = p.max_size if p.max_size is not None else target_size * 2.0
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMin", min_size)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", max_size)
+        gmsh.option.setNumber("Mesh.MeshSizeFromCurvature", p.curvature_refinement)
+        gmsh.option.setNumber("Mesh.Algorithm", p.surface_algorithm)
+        gmsh.option.setNumber("Mesh.Algorithm3D", p.volume_algorithm)
 
     def _extract_mesh_data(self) -> MeshData:
         import gmsh

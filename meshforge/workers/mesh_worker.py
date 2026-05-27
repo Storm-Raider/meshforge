@@ -4,6 +4,7 @@ from PyQt6.QtCore import QThread, pyqtSignal
 from meshforge.core.mesh_engine import MeshEngine
 from meshforge.models.geometry_data import GeometryData
 from meshforge.models.mesh_data import MeshData
+from meshforge.models.mesh_params import MeshParams
 
 
 class MeshWorker(QThread):
@@ -19,10 +20,10 @@ class MeshWorker(QThread):
     failed = pyqtSignal(str, list)   # user-readable error message + raw gmsh log lines
     progress = pyqtSignal(str)       # status text updates ("Meshing…", "Cancelling…")
 
-    def __init__(self, geo: GeometryData, size_factor: float = 1.0, parent=None):
+    def __init__(self, geo: GeometryData, params: MeshParams | None = None, parent=None):
         super().__init__(parent)
         self._geo = geo
-        self._size_factor = size_factor
+        self._params = params or MeshParams()
         self._cancel_requested = False
 
     def request_cancel(self) -> None:
@@ -34,7 +35,7 @@ class MeshWorker(QThread):
 
     def run(self) -> None:
         try:
-            engine = MeshEngine(size_factor=self._size_factor)
+            engine = MeshEngine(params=self._params)
             result = engine.mesh(self._geo)
 
             if self._cancel_requested:

@@ -21,6 +21,7 @@ from meshforge.core.quality_engine import QualityEngine
 from meshforge.ui.vtk_viewer import VtkViewer
 from meshforge.ui.quality_panel import QualityPanel
 from meshforge.ui.model_tree import ModelTree
+from meshforge.ui.mesh_panel import MeshPanel
 from meshforge.ui.log_panel import LogPanel
 
 import meshforge
@@ -72,8 +73,17 @@ class MainWindow(QMainWindow):
         # Three-panel horizontal splitter
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
+        # Left column: model tree + mesh settings stacked vertically
+        left_panel = QWidget()
+        left_layout = QVBoxLayout(left_panel)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(0)
         self._model_tree = ModelTree()
-        splitter.addWidget(self._model_tree)
+        self._mesh_panel = MeshPanel()
+        self._mesh_panel.remesh_requested.connect(self._on_remesh)
+        left_layout.addWidget(self._model_tree, stretch=1)
+        left_layout.addWidget(self._mesh_panel, stretch=0)
+        splitter.addWidget(left_panel)
 
         self._vtk_viewer = VtkViewer()
         self._vtk_viewer.setAcceptDrops(True)
@@ -178,6 +188,7 @@ class MainWindow(QMainWindow):
         self._cancel_btn.setVisible(state == _LOADING)
         self._sample_btn.setVisible(state == _EMPTY)
         self._export_action.setEnabled(state in (_SUCCESS, _PARTIAL))
+        self._mesh_panel.set_enabled(state in (_SUCCESS, _PARTIAL, _ERROR))
 
         if state == _EMPTY:
             self._status_bar.showMessage("Drop a STEP file to begin, or click 'Try with sample geometry'.")
@@ -253,18 +264,31 @@ class MainWindow(QMainWindow):
 
         filename = Path(self._current_file).name
         self._model_tree.set_geometry(geo, filename)
+        self._mesh_panel.set_geometry_defaults(geo.default_element_size())
         self._log_panel.append(
             f"Import OK: {geo.surface_count} surfaces, "
             f"bbox={geo.bounding_box_diagonal:.2f}, min_edge={geo.min_edge_length:.4f}"
         )
 
-        # Auto-start meshing
+        # Auto-start meshing with current params
+        self._start_mesh(geo)
+
+    def _start_mesh(self, geo) -> None:
         self._set_state(_LOADING, "Meshing…")
-        self._mesh_worker = MeshWorker(geo, parent=self)
+        self._mesh_worker = MeshWorker(geo, params=self._mesh_panel.get_params(), parent=self)
         self._mesh_worker.complete.connect(self._on_mesh_complete)
         self._mesh_worker.failed.connect(self._on_mesh_failed)
         self._mesh_worker.progress.connect(lambda msg: self._status_bar.showMessage(msg))
         self._mesh_worker.start()
+
+    def _on_remesh(self) -> None:
+        if self._geo is None or self._state not in (_SUCCESS, _PARTIAL, _ERROR):
+            return
+        self._mesh = None
+        self._model_tree.set_mesh_empty()
+        self._quality_panel.set_empty()
+        self._vtk_viewer.show_empty_state()
+        self._start_mesh(self._geo)
 
     def _on_import_failed(self, error: str) -> None:
         QMessageBox.critical(self, "Import Failed", error)
@@ -410,4 +434,5 @@ class MainWindow(QMainWindow):
         self._geo = None
         self._mesh = None
         self._current_file = ""
+        self._mesh_panel.set_geometry_defaults(0.0)
         self._set_state(_EMPTY)

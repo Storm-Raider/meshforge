@@ -81,5 +81,16 @@ class ModelTree(QWidget):
         root.addChild(q_item)
         q_item.setExpanded(True)
 
+    def set_mesh_empty(self) -> None:
+        """Remove the Mesh and Quality subtrees without clearing geometry."""
+        root = self._tree.topLevelItem(0)
+        if root is None:
+            return
+        for label in ("Mesh", "Quality"):
+            for i in range(root.childCount()):
+                if root.child(i).text(0) == label:
+                    root.removeChild(root.child(i))
+                    break
+
     def clear(self) -> None:
         self._tree.clear()
