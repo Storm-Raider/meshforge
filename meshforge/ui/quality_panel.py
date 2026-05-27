@@ -5,15 +5,63 @@ from PyQt6.QtWidgets import (
     QFrame, QSizePolicy, QToolTip, QCheckBox,
 )
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QPainter, QColor
 
 from meshforge.core.quality_engine import PASS_THRESHOLD, WARN_THRESHOLD
+
+_N_BINS = 20
 
 _TOOLTIP_TEXT = (
     "Jacobian > 0.3: acceptable for structural FEA.\n"
     "Jacobian 0.1–0.3: borderline — review element location before submitting.\n"
     "Jacobian < 0.1: solver divergence risk in Abaqus implicit static."
 )
+
+
+class _HistogramWidget(QWidget):
+    """Mini histogram of Jacobian distribution with pass/warn threshold markers."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._counts = np.zeros(_N_BINS, dtype=np.int32)
+        self.setFixedHeight(72)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+    def set_data(self, scalars: np.ndarray) -> None:
+        if scalars is None or len(scalars) == 0:
+            self._counts = np.zeros(_N_BINS, dtype=np.int32)
+        else:
+            counts, _ = np.histogram(scalars, bins=_N_BINS, range=(0.0, 1.0))
+            self._counts = counts.astype(np.int32)
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        w, h = self.width(), self.height()
+        n = len(self._counts)
+        max_count = max(int(self._counts.max()), 1)
+        bar_w = w / n
+
+        for i, count in enumerate(self._counts):
+            bin_center = (i + 0.5) / n
+            bar_h = int(h * count / max_count)
+            x = int(i * bar_w)
+            bw = max(int(bar_w) - 1, 1)
+            # hue: 240° (blue) at 0 → 0° (red) at 1
+            hue = int((1.0 - bin_center) * 240)
+            painter.fillRect(x, h - bar_h, bw, bar_h, QColor.fromHsv(hue, 200, 210))
+
+        # Warn threshold line (orange)
+        x_warn = int(WARN_THRESHOLD * w)
+        painter.setPen(QColor("#f0a500"))
+        painter.drawLine(x_warn, 0, x_warn, h)
+
+        # Pass threshold line (green)
+        x_pass = int(PASS_THRESHOLD * w)
+        painter.setPen(QColor("#4caf50"))
+        painter.drawLine(x_pass, 0, x_pass, h)
+
+        painter.end()
 
 
 class QualityPanel(QWidget):
@@ -62,6 +110,10 @@ class QualityPanel(QWidget):
         self._mean_label = self._stat_row(stats_layout, "Mean Jac", "#ccc")
 
         layout.addWidget(self._stats_frame)
+
+        # Jacobian distribution histogram
+        self._histogram = _HistogramWidget()
+        layout.addWidget(self._histogram)
 
         # Filter slider — controls lo threshold for color display
         filter_header = QHBoxLayout()
@@ -129,6 +181,7 @@ class QualityPanel(QWidget):
         self._fail_label.setText(f"{summary['fail']:,}")
         self._min_label.setText(f"{summary['min']:.3f}")
         self._mean_label.setText(f"{summary['mean']:.3f}")
+        self._histogram.set_data(summary.get("scalars"))
         self._slider.setEnabled(True)
         self._isolate_cb.setEnabled(True)
 
@@ -136,6 +189,7 @@ class QualityPanel(QWidget):
         for lbl in (self._pass_label, self._warn_label, self._fail_label,
                     self._min_label, self._mean_label):
             lbl.setText("—")
+        self._histogram.set_data(None)
         self._slider.setValue(0)
         self._slider.setEnabled(False)
         self._threshold_value_label.setText("0.00")

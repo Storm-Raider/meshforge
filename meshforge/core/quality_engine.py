@@ -47,7 +47,8 @@ class QualityEngine:
         n = len(scalars)
         if n == 0:
             return {"element_count": 0, "pass": 0, "warn": 0, "fail": 0,
-                    "min": 0.0, "mean": 0.0, "max": 0.0, "pass_pct": 0.0}
+                    "min": 0.0, "mean": 0.0, "max": 0.0, "pass_pct": 0.0,
+                    "scalars": scalars}
         n_pass = int(np.sum(scalars > PASS_THRESHOLD))
         n_warn = int(np.sum((scalars >= WARN_THRESHOLD) & (scalars <= PASS_THRESHOLD)))
         n_fail = int(np.sum(scalars < WARN_THRESHOLD))
@@ -60,4 +61,5 @@ class QualityEngine:
             "mean": float(scalars.mean()),
             "max": float(scalars.max()),
             "pass_pct": 100.0 * n_pass / n,
+            "scalars": scalars,
         }

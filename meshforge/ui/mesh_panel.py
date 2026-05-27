@@ -79,6 +79,18 @@ class MeshPanel(QWidget):
         title.setStyleSheet("font-weight: bold; color: #aaa;")
         layout.addWidget(title)
 
+        # Quick presets
+        preset_row = QHBoxLayout()
+        preset_row.setSpacing(4)
+        for label, factor in (("Coarse", 2.0), ("Medium", 1.0), ("Fine", 0.5)):
+            btn = QPushButton(label)
+            btn.setFixedHeight(22)
+            btn.setStyleSheet("font-size: 10px; padding: 0 4px;")
+            btn.setToolTip(f"Size factor {factor}×")
+            btn.clicked.connect(lambda _, f=factor: self._apply_preset(f))
+            preset_row.addWidget(btn)
+        layout.addLayout(preset_row)
+
         # Size factor
         layout.addWidget(self._make_label("Size factor"))
         sf_row = QHBoxLayout()
@@ -207,3 +219,6 @@ class MeshPanel(QWidget):
         self._max_spin.setEnabled(not checked)
         if checked:
             self._update_auto_labels()
+
+    def _apply_preset(self, factor: float) -> None:
+        self._size_spin.setValue(factor)

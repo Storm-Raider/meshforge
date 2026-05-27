@@ -96,8 +96,30 @@ class VtkViewer(QWidget):
         self._isolate_actor.SetVisibility(False)
         self._renderer.AddActor(self._isolate_actor)
 
+        # Scalar bar (color legend) — shown when mesh is loaded
+        self._scalar_bar = vtk.vtkScalarBarActor()
+        self._scalar_bar.SetLookupTable(self._lut)
+        self._scalar_bar.SetTitle("Jacobian")
+        self._scalar_bar.SetNumberOfLabels(5)
+        self._scalar_bar.SetOrientationToVertical()
+        self._scalar_bar.SetWidth(0.07)
+        self._scalar_bar.SetHeight(0.38)
+        self._scalar_bar.GetPositionCoordinate().SetCoordinateSystemToNormalizedDisplay()
+        self._scalar_bar.GetPositionCoordinate().SetValue(0.905, 0.08)
+        for prop in (self._scalar_bar.GetTitleTextProperty(),
+                     self._scalar_bar.GetLabelTextProperty()):
+            prop.SetColor(0.8, 0.8, 0.8)
+            prop.SetFontSize(10)
+            prop.BoldOff()
+            prop.ItalicOff()
+            prop.ShadowOff()
+        self._scalar_bar.SetVisibility(False)
+        self._renderer.AddActor2D(self._scalar_bar)
+
         style = vtk.vtkInteractorStyleTrackballCamera()
-        self._vtk_widget.GetRenderWindow().GetInteractor().SetInteractorStyle(style)
+        interactor = self._vtk_widget.GetRenderWindow().GetInteractor()
+        interactor.SetInteractorStyle(style)
+        interactor.AddObserver("KeyPressEvent", self._on_key_press)
 
     def _build_lut(self) -> vtk.vtkLookupTable:
         lut = vtk.vtkLookupTable()
@@ -126,6 +148,7 @@ class VtkViewer(QWidget):
         self._lut.SetTableRange(0.0, 1.0)
         self._actor.SetVisibility(True)
         self._isolate_actor.SetVisibility(False)
+        self._scalar_bar.SetVisibility(True)
         self._renderer.ResetCamera()
 
         self._empty_label.hide()
@@ -153,9 +176,35 @@ class VtkViewer(QWidget):
         self._grid = None
         self._actor.SetVisibility(False)
         self._isolate_actor.SetVisibility(False)
+        self._scalar_bar.SetVisibility(False)
         self._renderer.ResetCamera()
         self._vtk_widget.GetRenderWindow().Render()
         self._empty_label.show()
 
     def show_empty_state(self) -> None:
         self.clear()
+
+    def _on_key_press(self, obj, event) -> None:
+        key = obj.GetKeySym()
+        if key in ("f", "F"):
+            self._renderer.ResetCamera()
+            self._vtk_widget.GetRenderWindow().Render()
+        elif key in ("1", "KP_1"):
+            self._set_standard_view((0, -1, 0), (0, 0, 1))
+        elif key in ("3", "KP_3"):
+            self._set_standard_view((1, 0, 0), (0, 0, 1))
+        elif key in ("7", "KP_7"):
+            self._set_standard_view((0, 0, 1), (0, 1, 0))
+
+    def _set_standard_view(self, pos_dir: tuple, up_dir: tuple) -> None:
+        cam = self._renderer.GetActiveCamera()
+        fp = cam.GetFocalPoint()
+        dist = cam.GetDistance()
+        cam.SetPosition(
+            fp[0] + pos_dir[0] * dist,
+            fp[1] + pos_dir[1] * dist,
+            fp[2] + pos_dir[2] * dist,
+        )
+        cam.SetViewUp(*up_dir)
+        self._renderer.ResetCameraClippingRange()
+        self._vtk_widget.GetRenderWindow().Render()
