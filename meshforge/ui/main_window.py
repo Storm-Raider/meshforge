@@ -17,6 +17,7 @@ from meshforge.workers.import_worker import ImportWorker
 from meshforge.workers.mesh_worker import MeshWorker
 from meshforge.workers.quality_worker import QualityWorker
 from meshforge.export.inp_exporter import InpExporter
+from meshforge.export.nas_exporter import NasExporter
 from meshforge.core.quality_engine import QualityEngine
 from meshforge.ui.vtk_viewer import VtkViewer
 from meshforge.ui.quality_panel import QualityPanel
@@ -139,9 +140,9 @@ class MainWindow(QMainWindow):
         file_menu.addAction(open_action)
 
         file_menu.addSeparator()
-        export_action = QAction("Export Abaqus .inp…", self)
+        export_action = QAction("Export mesh…", self)
         export_action.setShortcut("Ctrl+E")
-        export_action.triggered.connect(self._export_inp)
+        export_action.triggered.connect(self._export_mesh)
         export_action.setEnabled(False)
         self._export_action = export_action
         file_menu.addAction(export_action)
@@ -265,7 +266,7 @@ class MainWindow(QMainWindow):
 
         filename = Path(self._current_file).name
         self._model_tree.set_geometry(geo, filename)
-        self._mesh_panel.set_geometry_defaults(geo.default_element_size())
+        self._mesh_panel.set_geometry(geo)
         self._log_panel.append(
             f"Import OK: {geo.surface_count} surfaces, "
             f"bbox={geo.bounding_box_diagonal:.2f}, min_edge={geo.min_edge_length:.4f}"
@@ -368,16 +369,20 @@ class MainWindow(QMainWindow):
     # Export
     # ------------------------------------------------------------------
 
-    def _export_inp(self) -> None:
+    def _export_mesh(self) -> None:
         if self._mesh is None or self._geo is None:
             return
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Export Abaqus .inp", "", "Abaqus Input (*.inp)"
+        path, selected_filter = QFileDialog.getSaveFileName(
+            self, "Export mesh", "",
+            "Abaqus Input (*.inp);;Nastran Bulk Data (*.nas)"
         )
         if not path:
             return
         try:
-            warnings = InpExporter().export(self._mesh, self._geo, path)
+            if "nas" in selected_filter.lower() or path.lower().endswith(".nas"):
+                warnings = NasExporter().export(self._mesh, path)
+            else:
+                warnings = InpExporter().export(self._mesh, self._geo, path)
             if warnings:
                 warn_text = "\n".join(f"• {w}" for w in warnings)
                 QMessageBox.warning(self, "Export Warnings",

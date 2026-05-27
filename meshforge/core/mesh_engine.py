@@ -229,6 +229,36 @@ class MeshEngine:
         gmsh.option.setNumber("Mesh.Algorithm", p.surface_algorithm)
         gmsh.option.setNumber("Mesh.Algorithm3D", p.volume_algorithm)
 
+        if p.refinement_zones:
+            curve_tags = [t for _, t in gmsh.model.getEntities(1)]
+            surface_tags = [t for _, t in gmsh.model.getEntities(2)]
+            # Must disable boundary size propagation or background field has no effect
+            gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)
+            all_field_ids = []
+            for zone in p.refinement_zones:
+                tags = surface_tags if zone.entity_type == "surface" else curve_tags
+                if zone.entity_index < 1 or zone.entity_index > len(tags):
+                    continue
+                tag = tags[zone.entity_index - 1]
+                field_dist = gmsh.model.mesh.field.add("Distance")
+                if zone.entity_type == "curve":
+                    gmsh.model.mesh.field.setNumbers(field_dist, "CurvesList", [tag])
+                else:
+                    gmsh.model.mesh.field.setNumbers(field_dist, "SurfacesList", [tag])
+                # Sampling=100: acceptable for mechanical parts (mm units, edges 1–500mm)
+                gmsh.model.mesh.field.setNumber(field_dist, "Sampling", 100)
+                field_thresh = gmsh.model.mesh.field.add("Threshold")
+                gmsh.model.mesh.field.setNumber(field_thresh, "InField", field_dist)
+                gmsh.model.mesh.field.setNumber(field_thresh, "SizeMin", target_size * zone.size_factor)
+                gmsh.model.mesh.field.setNumber(field_thresh, "SizeMax", target_size)
+                gmsh.model.mesh.field.setNumber(field_thresh, "DistMin", zone.influence_radius * 0.1)
+                gmsh.model.mesh.field.setNumber(field_thresh, "DistMax", zone.influence_radius)
+                all_field_ids.append(field_thresh)
+            if all_field_ids:
+                field_min = gmsh.model.mesh.field.add("Min")
+                gmsh.model.mesh.field.setNumbers(field_min, "FieldsList", all_field_ids)
+                gmsh.model.mesh.field.setAsBackgroundMesh(field_min)
+
     def _extract_mesh_data(self) -> MeshData:
         import gmsh
         node_tags, coords, _ = gmsh.model.mesh.getNodes()

@@ -15,6 +15,7 @@ class GeometryData:
     min_edge_length: float
     healing_status: str          # "ok" | "warn:<detail>" | "failed:<detail>"
     occ_shape: "TopoDS_Shape"
+    edge_count: int = 0
 
     def is_valid(self) -> bool:
         return self.healing_status.startswith("ok") or self.healing_status.startswith("warn")

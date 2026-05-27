@@ -3,11 +3,11 @@ from __future__ import annotations
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider,
     QDoubleSpinBox, QSpinBox, QComboBox, QPushButton,
-    QCheckBox, QFrame, QSizePolicy,
+    QCheckBox, QFrame, QGroupBox, QScrollArea,
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
-from meshforge.models.mesh_params import MeshParams
+from meshforge.models.mesh_params import MeshParams, RefinementZone
 
 _SURFACE_ALGOS = [
     ("Frontal-Delaunay", 6),
@@ -21,12 +21,84 @@ _VOLUME_ALGOS = [
 ]
 
 
+class _ZoneRow(QWidget):
+    """One refinement zone row: entity selector + size factor + radius + remove."""
+
+    removed = pyqtSignal(object)
+
+    def __init__(self, surface_count: int, edge_count: int, parent=None):
+        super().__init__(parent)
+        self._surface_count = max(1, surface_count)
+        self._edge_count = max(1, edge_count)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 1, 0, 1)
+        layout.setSpacing(3)
+
+        self._type_combo = QComboBox()
+        self._type_combo.addItems(["Surface", "Edge"])
+        self._type_combo.setFixedWidth(64)
+        self._type_combo.currentIndexChanged.connect(self._on_type_changed)
+
+        self._index_spin = QSpinBox()
+        self._index_spin.setRange(1, self._surface_count)
+        self._index_spin.setValue(1)
+        self._index_spin.setFixedWidth(40)
+        self._index_spin.setToolTip("Entity index (1-based)")
+
+        self._factor_spin = QDoubleSpinBox()
+        self._factor_spin.setRange(0.1, 1.0)
+        self._factor_spin.setSingleStep(0.05)
+        self._factor_spin.setDecimals(2)
+        self._factor_spin.setValue(0.3)
+        self._factor_spin.setFixedWidth(50)
+        self._factor_spin.setToolTip("Local size factor relative to global (0.1 = 10%)")
+
+        self._radius_spin = QDoubleSpinBox()
+        self._radius_spin.setRange(0.001, 99999.0)
+        self._radius_spin.setDecimals(2)
+        self._radius_spin.setValue(5.0)
+        self._radius_spin.setFixedWidth(56)
+        self._radius_spin.setToolTip("Influence radius (STEP file units)")
+
+        remove_btn = QPushButton("✕")
+        remove_btn.setFixedSize(18, 18)
+        remove_btn.setStyleSheet("font-size: 9px; padding: 0;")
+        remove_btn.clicked.connect(lambda: self.removed.emit(self))
+
+        layout.addWidget(self._type_combo)
+        layout.addWidget(self._index_spin)
+        layout.addWidget(self._factor_spin)
+        layout.addWidget(self._radius_spin)
+        layout.addWidget(remove_btn)
+
+    def _on_type_changed(self, index: int) -> None:
+        count = self._surface_count if index == 0 else self._edge_count
+        current = min(self._index_spin.value(), count)
+        self._index_spin.setRange(1, count)
+        self._index_spin.setValue(current)
+
+    def update_counts(self, surface_count: int, edge_count: int) -> None:
+        self._surface_count = max(1, surface_count)
+        self._edge_count = max(1, edge_count)
+        self._on_type_changed(self._type_combo.currentIndex())
+
+    def get_zone(self) -> RefinementZone:
+        entity_type = "surface" if self._type_combo.currentIndex() == 0 else "curve"
+        return RefinementZone(
+            entity_type=entity_type,
+            entity_index=self._index_spin.value(),
+            size_factor=self._factor_spin.value(),
+            influence_radius=self._radius_spin.value(),
+        )
+
+
 class MeshPanel(QWidget):
     """Left panel: mesh parameter controls + Re-mesh button.
 
-    Call set_geometry_defaults(target_size) when geometry loads so the
-    auto min/max labels show meaningful values. get_params() returns the
-    current MeshParams at any time.
+    Call set_geometry(geo) when geometry loads to enable the panel and
+    populate entity counts for refinement zone selectors.
+    get_params() returns the current MeshParams at any time.
     """
 
     remesh_requested = pyqtSignal()
@@ -34,8 +106,11 @@ class MeshPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMinimumWidth(200)
-        self.setMaximumWidth(280)
+        self.setMaximumWidth(300)
         self._target_size: float = 0.0
+        self._surface_count: int = 1
+        self._edge_count: int = 1
+        self._zone_rows: list[_ZoneRow] = []
         self._build_ui()
         self.set_enabled(False)
 
@@ -51,12 +126,27 @@ class MeshPanel(QWidget):
             curvature_refinement=self._curvature_spin.value(),
             surface_algorithm=_SURFACE_ALGOS[self._surf_combo.currentIndex()][1],
             volume_algorithm=_VOLUME_ALGOS[self._vol_combo.currentIndex()][1],
+            refinement_zones=[row.get_zone() for row in self._zone_rows],
         )
 
     def set_geometry_defaults(self, target_size: float) -> None:
         """Called after import so auto min/max labels reflect actual geometry."""
         self._target_size = target_size
         self._update_auto_labels()
+
+    def set_geometry(self, geo) -> None:
+        """Update entity counts for refinement zone dropdowns."""
+        from meshforge.models.geometry_data import GeometryData
+        if not isinstance(geo, GeometryData):
+            return
+        self._surface_count = max(1, geo.surface_count)
+        self._edge_count = max(1, geo.edge_count)
+        for row in self._zone_rows:
+            row.update_counts(self._surface_count, self._edge_count)
+        self._zones_count_label.setText(
+            f"{geo.surface_count} surfaces, {geo.edge_count} edges"
+        )
+        self.set_geometry_defaults(geo.default_element_size())
 
     def set_enabled(self, enabled: bool) -> None:
         self._remesh_btn.setEnabled(enabled)
@@ -102,7 +192,7 @@ class MeshPanel(QWidget):
         self._size_spin.setFixedWidth(60)
         self._size_spin.valueChanged.connect(self._update_auto_labels)
         self._size_slider = QSlider(Qt.Orientation.Horizontal)
-        self._size_slider.setRange(1, 50)   # 0.1–5.0 in steps of 0.1
+        self._size_slider.setRange(1, 50)
         self._size_slider.setValue(10)
         self._size_slider.valueChanged.connect(self._on_slider)
         self._size_spin.valueChanged.connect(self._on_spinbox)
@@ -171,6 +261,53 @@ class MeshPanel(QWidget):
         )
         layout.addWidget(self._vol_combo)
 
+        # Refinement Zones
+        zones_group = QGroupBox("Refinement Zones")
+        zones_group.setStyleSheet(
+            "QGroupBox { color: #aaa; font-size: 11px; font-weight: bold; "
+            "border: 1px solid #444; border-radius: 3px; margin-top: 6px; padding-top: 4px; } "
+            "QGroupBox::title { subcontrol-origin: margin; left: 6px; }"
+        )
+        zones_layout = QVBoxLayout(zones_group)
+        zones_layout.setContentsMargins(4, 4, 4, 4)
+        zones_layout.setSpacing(3)
+
+        self._zones_count_label = QLabel("Load a STEP file to add zones")
+        self._zones_count_label.setStyleSheet("color: #666; font-size: 10px;")
+        zones_layout.addWidget(self._zones_count_label)
+
+        # Column headers
+        header_row = QHBoxLayout()
+        header_row.setSpacing(3)
+        for text, width in (("Type", 64), ("Idx", 40), ("Factor", 50), ("Radius", 56)):
+            lbl = QLabel(text)
+            lbl.setFixedWidth(width)
+            lbl.setStyleSheet("color: #777; font-size: 9px;")
+            header_row.addWidget(lbl)
+        header_row.addStretch()
+        zones_layout.addLayout(header_row)
+
+        # Container for zone rows
+        self._zones_container = QWidget()
+        self._zones_layout = QVBoxLayout(self._zones_container)
+        self._zones_layout.setContentsMargins(0, 0, 0, 0)
+        self._zones_layout.setSpacing(2)
+
+        scroll = QScrollArea()
+        scroll.setWidget(self._zones_container)
+        scroll.setWidgetResizable(True)
+        scroll.setMaximumHeight(120)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        zones_layout.addWidget(scroll)
+
+        self._add_zone_btn = QPushButton("+ Add Zone")
+        self._add_zone_btn.setFixedHeight(22)
+        self._add_zone_btn.setStyleSheet("font-size: 10px; padding: 0 6px;")
+        self._add_zone_btn.clicked.connect(self._add_zone)
+        zones_layout.addWidget(self._add_zone_btn)
+
+        layout.addWidget(zones_group)
+
         # Re-mesh button
         self._remesh_btn = QPushButton("Re-mesh")
         self._remesh_btn.clicked.connect(self.remesh_requested)
@@ -222,3 +359,15 @@ class MeshPanel(QWidget):
 
     def _apply_preset(self, factor: float) -> None:
         self._size_spin.setValue(factor)
+
+    def _add_zone(self) -> None:
+        row = _ZoneRow(self._surface_count, self._edge_count, self._zones_container)
+        row.removed.connect(self._remove_zone)
+        self._zones_layout.addWidget(row)
+        self._zone_rows.append(row)
+
+    def _remove_zone(self, row: _ZoneRow) -> None:
+        if row in self._zone_rows:
+            self._zone_rows.remove(row)
+        self._zones_layout.removeWidget(row)
+        row.deleteLater()

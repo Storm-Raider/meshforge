@@ -36,6 +36,8 @@ class ModelTree(QWidget):
 
         geom_item = QTreeWidgetItem(["Geometry"])
         geom_item.addChild(QTreeWidgetItem([f"Surfaces: {geo.surface_count}"]))
+        if geo.edge_count > 0:
+            geom_item.addChild(QTreeWidgetItem([f"Edges: {geo.edge_count}"]))
         geom_item.addChild(QTreeWidgetItem([f"BBox diagonal: {geo.bounding_box_diagonal:.2f}"]))
         geom_item.addChild(QTreeWidgetItem([f"Min edge: {geo.min_edge_length:.4f}"]))
         status_text = geo.healing_status.split(":")[0].upper()

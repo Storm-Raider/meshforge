@@ -37,12 +37,14 @@ class StepImporter:
         surface_count = self._count_surfaces(shape)
         bbox_diagonal = self._bbox_diagonal(shape)
         min_edge = self._min_edge_length(shape)
+        edge_count = self._count_edges(shape)
         return GeometryData(
             surface_count=surface_count,
             bounding_box_diagonal=bbox_diagonal,
             min_edge_length=min_edge,
             healing_status=healing_status,
             occ_shape=shape,
+            edge_count=edge_count,
         )
 
     # ------------------------------------------------------------------
@@ -105,6 +107,14 @@ class StepImporter:
     def _count_surfaces(self, shape: TopoDS_Shape) -> int:
         from OCC.Core.TopAbs import TopAbs_FACE
         exp = TopExp_Explorer(shape, TopAbs_FACE)
+        count = 0
+        while exp.More():
+            count += 1
+            exp.Next()
+        return count
+
+    def _count_edges(self, shape: TopoDS_Shape) -> int:
+        exp = TopExp_Explorer(shape, TopAbs_EDGE)
         count = 0
         while exp.More():
             count += 1

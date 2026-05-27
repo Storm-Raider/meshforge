@@ -3,6 +3,16 @@ from dataclasses import dataclass, field
 
 
 @dataclass
+class RefinementZone:
+    """One local mesh density zone tied to a surface or curve entity."""
+
+    entity_type: str    # "surface" or "curve"
+    entity_index: int   # 1-based index into Gmsh getEntities(2) or getEntities(1)
+    size_factor: float  # 0.1–1.0 relative to global target size
+    influence_radius: float  # model units (same as STEP file units)
+
+
+@dataclass
 class MeshParams:
     """All user-controllable meshing parameters.
 
@@ -26,3 +36,5 @@ class MeshParams:
 
     # Gmsh volume algorithm:  1=Delaunay  9=HXT
     volume_algorithm: int = 1
+
+    refinement_zones: list[RefinementZone] = field(default_factory=list)

@@ -69,3 +69,28 @@ class TestMeshEngineWithFixture:
         from meshforge.core.mesh_engine import VTK_QUADRATIC_TETRA
         result = MeshEngine().mesh(bracket_geo)
         assert np.all(result.element_types == VTK_QUADRATIC_TETRA)
+
+    def test_mesh_with_surface_refinement_zone(self, bracket_geo):
+        from meshforge.models.mesh_params import MeshParams, RefinementZone
+        zone = RefinementZone(
+            entity_type="surface",
+            entity_index=1,
+            size_factor=0.5,
+            influence_radius=bracket_geo.bounding_box_diagonal * 0.1,
+        )
+        params = MeshParams(size_factor=2.0, refinement_zones=[zone])
+        result = MeshEngine(params=params).mesh(bracket_geo)
+        assert result.element_count > 0
+        assert result.connectivity.shape[1] == 10
+
+    def test_mesh_with_stale_zone_skipped(self, bracket_geo):
+        from meshforge.models.mesh_params import MeshParams, RefinementZone
+        stale_zone = RefinementZone(
+            entity_type="surface",
+            entity_index=9999,
+            size_factor=0.1,
+            influence_radius=1.0,
+        )
+        params = MeshParams(size_factor=2.0, refinement_zones=[stale_zone])
+        result = MeshEngine(params=params).mesh(bracket_geo)
+        assert result.element_count > 0

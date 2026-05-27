@@ -25,9 +25,13 @@ def main() -> None:
     log: list[str] = []
     try:
         from meshforge.core.mesh_engine import MeshEngine
-        from meshforge.models.mesh_params import MeshParams
+        from meshforge.models.mesh_params import MeshParams, RefinementZone
 
-        params = MeshParams(**params_dict)
+        params_data = dict(params_dict)
+        params_data["refinement_zones"] = [
+            RefinementZone(**z) for z in params_data.get("refinement_zones", [])
+        ]
+        params = MeshParams(**params_data)
         engine = MeshEngine(params=params)
         mesh_data = engine.mesh_from_step(step_path, default_element_size)
         log = engine.get_gmsh_log()
