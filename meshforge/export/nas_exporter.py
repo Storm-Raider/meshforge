@@ -63,12 +63,17 @@ class NasExporter:
             lines.append(f"GRID,{i},,{x:.6g},{y:.6g},{z:.6g}")
 
         # CTETRA-10: 12 fields (EID + PID + 10 GIDs). Free-field max 8 per line.
-        # Line 1: EID, PID, G1–G6 (8 fields)
-        # Line 2: +, G7–G10 (5 fields including continuation marker)
+        # Line 1: EID, PID, G1-G6 (8 fields)
+        # Line 2: +, G7-G10 (5 fields including continuation marker)
+        #
+        # Gmsh type-11 ordering vs Nastran QRG: conn[8] and conn[9] are swapped.
+        # Gmsh: conn[8]=mid(G3,G4), conn[9]=mid(G2,G4)
+        # Nastran QRG: G9=mid(G2,G4), G10=mid(G3,G4)
+        # Permutation applied: [0,1,2,3,4,5,6,7,9,8]
         for i, conn in enumerate(mesh.connectivity, 1):
             gids = [str(int(n) + 1) for n in conn]
             lines.append(f"CTETRA,{i},1,{gids[0]},{gids[1]},{gids[2]},{gids[3]},{gids[4]},{gids[5]},")
-            lines.append(f"+,{gids[6]},{gids[7]},{gids[8]},{gids[9]}")
+            lines.append(f"+,{gids[6]},{gids[7]},{gids[9]},{gids[8]}")
 
         lines.append("MAT1,1,210000.0,,0.3")
         lines.append("PSOLID,1,1")
