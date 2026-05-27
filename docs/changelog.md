@@ -4,6 +4,40 @@ All notable changes to MeshForge are documented here.
 
 ---
 
+## v0.2.0 — 2026-05-27
+
+### Added
+
+**Local mesh refinement zones**
+- `RefinementZone` dataclass: per-feature mesh density control via `entity_type` (surface/edge), `entity_index` (1-based), `size_factor` (0.1–1.0× global), and `influence_radius` (STEP file units)
+- Gmsh Distance + Threshold + Min sizing fields applied in `MeshEngine._set_options()` when zones are present. Fine mesh within `influence_radius × 0.1` of the entity, linearly ramping back to global size at `influence_radius`
+- `CharacteristicLengthExtendFromBoundary` disabled only when zones are active — zero change to baseline mesh output when no zones are set
+- Stale zone indices (entity removed after STEP reload) are silently skipped; meshing continues with remaining valid zones
+- Refinement Zones panel in mesh settings: Add/Remove zone rows, each with Surface/Edge selector, index spinbox, size factor, and influence radius
+
+**Nastran .nas export**
+- `NasExporter`: Nastran Bulk Data free-field format. GRID cards (`%.6g` coordinates), CTETRA-10 with 8+4 field continuation split (EID+PID+G1–G6 on line 1, `+,G7–G10` on continuation), MAT1 steel placeholder (E=210 GPa, nu=0.3), PSOLID, ENDDATA
+- Export dialog now offers Abaqus `.inp` / Nastran `.nas` format selection
+- Material placeholder warning shown in log panel and as a `$` comment in the exported file
+
+**Model tree**
+- Edge count shown in geometry subtree (populated from OCC at import time)
+
+**Tests**
+- 25 new tests: `RefinementZone` unit tests, subprocess serialization round-trip, `NasExporter` format correctness (GRID count, CTETRA continuation split, ENDDATA, 1-based node IDs), mesh-engine integration tests with zones and stale-zone skip. Total: 57 tests
+
+### Fixed
+
+- Subprocess deserialization: `dataclasses.asdict()` converts `RefinementZone` objects to plain dicts; `_mesh_subprocess.py` now reconstructs `RefinementZone(**z)` before building `MeshParams` — previously would have crashed with `AttributeError` on first zone use
+
+### Known limitations
+
+- CTETRA-10 mid-node ordering against the Nastran QRG is not yet manually verified. If your solver reports incorrect results, compare node connectivity against the Nastran Quick Reference Guide before using for production analysis. CTETRA-4 export will be provided as a fallback in v0.2.1 if verification fails
+- Refinement zone surface/edge identification is index-based (trial and error). Surface highlight on hover is planned for v0.3
+- Zone `influence_radius` is in STEP file units; MeshForge displays "STEP units" as a hint — full unit detection is v0.3
+
+---
+
 ## v0.1.0 — 2026-05-24
 
 Initial release. Full pipeline from STEP import to C3D10 mesh to Abaqus `.inp` export.
