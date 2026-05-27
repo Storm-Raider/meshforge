@@ -135,14 +135,14 @@ class MeshPanel(QWidget):
         self._update_auto_labels()
 
     def set_geometry(self, geo) -> None:
-        """Update entity counts for refinement zone dropdowns."""
+        """Update entity counts for refinement zone dropdowns. Clears any existing zones."""
         from meshforge.models.geometry_data import GeometryData
         if not isinstance(geo, GeometryData):
             return
+        for row in list(self._zone_rows):
+            self._remove_zone(row)
         self._surface_count = max(1, geo.surface_count)
         self._edge_count = max(1, geo.edge_count)
-        for row in self._zone_rows:
-            row.update_counts(self._surface_count, self._edge_count)
         self._zones_count_label.setText(
             f"{geo.surface_count} surfaces, {geo.edge_count} edges"
         )

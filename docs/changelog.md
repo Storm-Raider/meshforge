@@ -32,7 +32,6 @@ All notable changes to MeshForge are documented here.
 
 ### Known limitations
 
-- CTETRA-10 mid-node ordering against the Nastran QRG is not yet manually verified. If your solver reports incorrect results, compare node connectivity against the Nastran Quick Reference Guide before using for production analysis. CTETRA-4 export will be provided as a fallback in v0.2.1 if verification fails
 - Refinement zone surface/edge identification is index-based (trial and error). Surface highlight on hover is planned for v0.3
 - Zone `influence_radius` is in STEP file units; MeshForge displays "STEP units" as a hint — full unit detection is v0.3
 
