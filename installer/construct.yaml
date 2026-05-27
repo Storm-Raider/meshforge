@@ -1,0 +1,29 @@
+name: MeshForge
+version: 0.2.0
+
+installer_type: exe
+company: MeshForge
+
+# No admin rights required — installs to user's AppData
+default_prefix_domain_user: '%LOCALAPPDATA%\MeshForge'
+default_prefix: '%LOCALAPPDATA%\MeshForge'
+
+channels:
+  - conda-forge
+
+specs:
+  - python=3.11.*
+  - pythonocc-core=7.8.*
+  - vtk=9.3.*
+  - pyqt6=6.8.*
+  - gmsh=4.15.*
+  - numpy=1.26.*
+  - pip
+
+# meshforge wheel + sample geometry bundled into share/meshforge/
+# post_install.bat pip-installs the wheel after the conda env is set up.
+extra_files:
+  - ../dist/meshforge-0.2.0-py3-none-any.whl: share/meshforge/meshforge-0.2.0-py3-none-any.whl
+  - ../tests/fixtures/bracket_clean.step: share/meshforge/bracket_clean.step
+
+post_install: post_install.bat

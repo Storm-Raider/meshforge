@@ -41,3 +41,7 @@ Thumbs.db
 
 # gstack local state (not project-level)
 .gstack/
+
+# Installer binaries (built artifacts, not source)
+installer/*.exe
+installer/*.sh
