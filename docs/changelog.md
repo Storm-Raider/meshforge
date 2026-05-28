@@ -4,6 +4,38 @@ All notable changes to MeshForge are documented here.
 
 ---
 
+## v0.3.0 — 2026-05-28
+
+### Added
+
+**Additional element types**
+- Linear Tet (C3D4): 4-node tetrahedral elements for explicit dynamics solvers. `MeshParams(mesh_type="lintet")`. Exported as C3D4 in `.inp` and CTETRA-4 in `.nas`
+- Hex meshing (C3D8): linear hexahedral elements via Gmsh barycentric subdivision. `MeshParams(mesh_type="hex")`. Exported as C3D8 in `.inp` and CHEXA-8 in `.nas`
+- `QualityEngine` handles all three tet types (C3D4, C3D10) using shared `_compute_tet_corners()` and hex type (C3D8) separately
+
+**Mesh optimization**
+- Laplacian + gradient-descent smoothing via `gmsh.model.mesh.optimize()`. `MeshParams(smooth_iter=N)` runs N passes after meshing. Works for tet and hex. Repositions nodes without changing topology.
+
+**Surface mesh preview**
+- "Preview Surface" button runs a fast 2D surface mesh (triangles + quads) in a background thread and displays it with steel-blue flat shading and edge lines. Lets the user validate element density and refinement zones before committing to a full 3D volume mesh. Status bar shows triangle count and node count.
+
+**UI / visualization**
+- Scalar bar (color legend) in the viewport, showing the Jacobian color scale
+- Camera preset shortcuts: numpad 1 (front), 3 (right), 7 (top), F (fit all)
+- Jacobian histogram in the quality panel
+- Mesh size presets in the mesh panel
+
+### Fixed
+
+- `InpExporter` and `NasExporter` now export C3D4 and C3D6 (wedge) elements correctly
+- CTETRA-10 Gmsh→Nastran node permutation: conn[8] and conn[9] were swapped (corner-midpoint ordering mismatch). Fixed permutation `[0,1,2,3,4,5,6,7,9,8]`
+
+### Tests
+
+- 26 new tests: hex meshing, lintet meshing, smoothing, surface mesh, quality engine lintet. Total: 83 tests
+
+---
+
 ## v0.2.0 — 2026-05-27
 
 ### Added

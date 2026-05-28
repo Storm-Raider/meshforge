@@ -17,7 +17,7 @@ class InpExporter:
     """Exports MeshData to Abaqus .inp format.
 
     No Qt imports. Writes directly from MeshData — no re-meshing.
-    Supports C3D10 (quadratic tet) and C3D8 (linear hex) element types.
+    Supports C3D4 (linear tet), C3D10 (quadratic tet), C3D8 (linear hex), C3D6 (wedge).
     """
 
     def export(self, mesh: MeshData, geo: GeometryData, dest_path: str | Path) -> list[str]:

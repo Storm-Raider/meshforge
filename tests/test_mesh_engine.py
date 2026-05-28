@@ -137,9 +137,10 @@ class TestMeshEngineWithFixture:
     def test_smoothing_zero_is_noop(self, bracket_geo):
         from meshforge.models.mesh_params import MeshParams
         params_base = MeshParams(size_factor=2.0, smooth_iter=0)
-        params_smooth = MeshParams(size_factor=2.0, smooth_iter=0)
+        params_smooth = MeshParams(size_factor=2.0, smooth_iter=3)
         r1 = MeshEngine(params=params_base).mesh(bracket_geo)
         r2 = MeshEngine(params=params_smooth).mesh(bracket_geo)
+        # Smoothing repositions nodes but must not add or remove elements
         assert r1.element_count == r2.element_count
 
     def test_lintet_mesh_returns_c3d4(self, bracket_geo):
