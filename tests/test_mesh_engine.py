@@ -183,6 +183,20 @@ class TestMeshEngineWithFixture:
         assert result.connectivity.min() >= 0
         assert result.connectivity.max() < result.node_count
 
+    def test_surface_mesh_has_surface_tags(self, bracket_geo):
+        from meshforge.models.mesh_params import MeshParams
+        params = MeshParams(size_factor=2.0)
+        result = MeshEngine(params=params).surface_mesh(bracket_geo)
+        assert len(result.surface_tags) == result.element_count
+        assert result.surface_tags.min() >= 1   # Gmsh tags are 1-based
+
+    def test_surface_mesh_tag_count_matches_surfaces(self, bracket_geo):
+        from meshforge.models.mesh_params import MeshParams
+        params = MeshParams(size_factor=2.0)
+        result = MeshEngine(params=params).surface_mesh(bracket_geo)
+        unique_tags = set(result.surface_tags.tolist())
+        assert len(unique_tags) == bracket_geo.surface_count
+
     def test_surface_mesh_faster_than_volume(self, bracket_geo):
         import time
         from meshforge.models.mesh_params import MeshParams

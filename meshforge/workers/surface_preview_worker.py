@@ -35,7 +35,11 @@ class SurfacePreviewWorker(QThread):
 
 
 def _mesh_to_polydata(mesh):
-    """Convert a surface MeshData (triangles/quads) to vtkPolyData."""
+    """Convert a surface MeshData (triangles/quads) to vtkPolyData.
+
+    Adds a "SurfaceTag" cell data array when mesh.surface_tags is populated,
+    enabling per-surface picking and highlight in VtkViewer.
+    """
     import vtk
     try:
         from vtk.util.numpy_support import numpy_to_vtk
@@ -49,14 +53,23 @@ def _mesh_to_polydata(mesh):
     polydata.SetPoints(pts)
 
     cells = vtk.vtkCellArray()
+    cell_order: list[int] = []   # track which mesh element index each cell came from
     for i, conn in enumerate(mesh.connectivity):
         et = int(mesh.element_types[i])
         if et == 5:
-            n = conn[:3].astype(np.int64).tolist()
-            cells.InsertNextCell(3, n)
+            cells.InsertNextCell(3, conn[:3].astype(np.int64).tolist())
+            cell_order.append(i)
         elif et == 9:
-            n = conn[:4].astype(np.int64).tolist()
-            cells.InsertNextCell(4, n)
+            cells.InsertNextCell(4, conn[:4].astype(np.int64).tolist())
+            cell_order.append(i)
     polydata.SetPolys(cells)
+
+    if len(mesh.surface_tags) == len(mesh.connectivity) and len(cell_order) > 0:
+        tag_arr = vtk.vtkIntArray()
+        tag_arr.SetName("SurfaceTag")
+        tag_arr.SetNumberOfValues(len(cell_order))
+        for cell_pos, elem_idx in enumerate(cell_order):
+            tag_arr.SetValue(cell_pos, int(mesh.surface_tags[elem_idx]))
+        polydata.GetCellData().AddArray(tag_arr)
 
     return polydata

@@ -93,6 +93,7 @@ class MainWindow(QMainWindow):
         self._vtk_viewer.setAcceptDrops(True)
         self._vtk_viewer.dragEnterEvent = self._drag_enter
         self._vtk_viewer.dropEvent = self._drop_event
+        self._vtk_viewer.surface_picked.connect(self._on_surface_picked)
         splitter.addWidget(self._vtk_viewer)
 
         self._quality_panel = QualityPanel()
@@ -311,6 +312,15 @@ class MainWindow(QMainWindow):
         self._preview_worker.complete.connect(self._on_preview_complete)
         self._preview_worker.failed.connect(self._on_preview_failed)
         self._preview_worker.start()
+
+    def _on_surface_picked(self, tag: int) -> None:
+        msg = f"Surface {tag} selected"
+        if self._mesh_panel._zone_rows:
+            self._mesh_panel.set_last_zone_surface(tag)
+            msg += f" — zone index set to {tag}"
+        else:
+            msg += " — add a Refinement Zone to target it"
+        self._status_bar.showMessage(msg)
 
     def _on_preview_complete(self, polydata, tri_count: int, node_count: int) -> None:
         self._progress_bar.hide()

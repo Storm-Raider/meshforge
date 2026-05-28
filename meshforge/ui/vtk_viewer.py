@@ -10,7 +10,7 @@ except ImportError:
 
 
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 
 
 class VtkViewer(QWidget):
@@ -21,10 +21,14 @@ class VtkViewer(QWidget):
     surface polydata and scalars and calls Render().
     """
 
+    surface_picked = pyqtSignal(int)   # emitted with Gmsh surface tag on click (preview mode only)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._build_ui()
         self._build_vtk_pipeline()
+        self._press_pos = (0, 0)       # used to distinguish click from drag
+        self._picking_enabled = False  # True only when surface preview polydata has SurfaceTag data
 
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -116,10 +120,42 @@ class VtkViewer(QWidget):
         self._scalar_bar.SetVisibility(False)
         self._renderer.AddActor2D(self._scalar_bar)
 
+        # Highlight pipeline — shows selected surface in gold when picking is active
+        self._highlight_threshold = vtk.vtkThreshold()
+        self._highlight_threshold.SetInputArrayToProcess(
+            0, 0, 0, vtk.vtkDataObject.FIELD_ASSOCIATION_CELLS, "SurfaceTag"
+        )
+        self._highlight_threshold.SetThresholdFunction(vtk.vtkThreshold.THRESHOLD_BETWEEN)
+
+        self._highlight_surf = vtk.vtkDataSetSurfaceFilter()
+        self._highlight_surf.SetInputConnection(self._highlight_threshold.GetOutputPort())
+        self._highlight_surf.SetNonlinearSubdivisionLevel(1)
+
+        self._highlight_mapper = vtk.vtkPolyDataMapper()
+        self._highlight_mapper.SetInputConnection(self._highlight_surf.GetOutputPort())
+        self._highlight_mapper.ScalarVisibilityOff()
+
+        self._highlight_actor = vtk.vtkActor()
+        self._highlight_actor.SetMapper(self._highlight_mapper)
+        prop = self._highlight_actor.GetProperty()
+        prop.SetColor(1.0, 0.75, 0.0)   # gold
+        prop.SetOpacity(0.85)
+        prop.EdgeVisibilityOn()
+        prop.SetEdgeColor(1.0, 0.6, 0.0)
+        prop.SetLineWidth(1.5)
+        self._highlight_actor.SetVisibility(False)
+        self._renderer.AddActor(self._highlight_actor)
+
+        # Cell picker for surface identification
+        self._picker = vtk.vtkCellPicker()
+        self._picker.SetTolerance(0.005)
+
         style = vtk.vtkInteractorStyleTrackballCamera()
         interactor = self._vtk_widget.GetRenderWindow().GetInteractor()
         interactor.SetInteractorStyle(style)
         interactor.AddObserver("KeyPressEvent", self._on_key_press)
+        interactor.AddObserver("LeftButtonPressEvent", self._on_left_press)
+        interactor.AddObserver("LeftButtonReleaseEvent", self._on_left_release)
 
     def _build_lut(self) -> vtk.vtkLookupTable:
         lut = vtk.vtkLookupTable()
@@ -132,6 +168,8 @@ class VtkViewer(QWidget):
         return lut
 
     def display_mesh(self, surface_polydata, quality_scalars: np.ndarray, grid) -> None:
+        self._picking_enabled = False
+        self._highlight_actor.SetVisibility(False)
         """Called from main thread after QualityWorker emits scalars_ready.
 
         surface_polydata already carries per-surface-cell Jacobian scalars
@@ -160,8 +198,10 @@ class VtkViewer(QWidget):
 
         No quality coloring — shows mesh density so the user can validate size
         factors and refinement zones before committing to a full 3D volume mesh.
+        Enables surface picking when polydata carries "SurfaceTag" cell data.
         """
         self._grid = None
+        self._highlight_actor.SetVisibility(False)
         self._mapper.ScalarVisibilityOff()
         self._mapper.SetInputData(polydata)
 
@@ -175,6 +215,8 @@ class VtkViewer(QWidget):
         self._isolate_actor.SetVisibility(False)
         self._scalar_bar.SetVisibility(False)
         self._renderer.ResetCamera()
+
+        self._picking_enabled = polydata.GetCellData().GetArray("SurfaceTag") is not None
 
         self._empty_label.hide()
         self._vtk_widget.GetRenderWindow().Render()
@@ -199,8 +241,10 @@ class VtkViewer(QWidget):
 
     def clear(self) -> None:
         self._grid = None
+        self._picking_enabled = False
         self._actor.SetVisibility(False)
         self._isolate_actor.SetVisibility(False)
+        self._highlight_actor.SetVisibility(False)
         self._scalar_bar.SetVisibility(False)
         self._renderer.ResetCamera()
         self._vtk_widget.GetRenderWindow().Render()
@@ -208,6 +252,44 @@ class VtkViewer(QWidget):
 
     def show_empty_state(self) -> None:
         self.clear()
+
+    def _on_left_press(self, obj, event) -> None:
+        self._press_pos = obj.GetEventPosition()
+
+    def _on_left_release(self, obj, event) -> None:
+        if not self._picking_enabled:
+            return
+        rx, ry = obj.GetEventPosition()
+        px, py = self._press_pos
+        if abs(rx - px) > 4 or abs(ry - py) > 4:
+            return  # drag, not click — let rotation stand
+
+        self._picker.Pick(rx, ry, 0, self._renderer)
+        cell_id = self._picker.GetCellId()
+
+        if cell_id < 0:
+            # Clicked empty space — deselect
+            self._highlight_actor.SetVisibility(False)
+            self._vtk_widget.GetRenderWindow().Render()
+            return
+
+        polydata = self._mapper.GetInput()
+        if polydata is None:
+            return
+        tag_arr = polydata.GetCellData().GetArray("SurfaceTag")
+        if tag_arr is None:
+            return
+
+        tag = int(tag_arr.GetValue(cell_id))
+        if tag <= 0:
+            return
+
+        self._highlight_threshold.SetInputData(polydata)
+        self._highlight_threshold.SetLowerThreshold(tag - 0.5)
+        self._highlight_threshold.SetUpperThreshold(tag + 0.5)
+        self._highlight_actor.SetVisibility(True)
+        self._vtk_widget.GetRenderWindow().Render()
+        self.surface_picked.emit(tag)
 
     def _on_key_press(self, obj, event) -> None:
         key = obj.GetKeySym()

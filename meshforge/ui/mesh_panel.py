@@ -162,6 +162,13 @@ class MeshPanel(QWidget):
         self._remesh_btn.setEnabled(enabled)
         self._preview_btn.setEnabled(enabled)
 
+    def set_last_zone_surface(self, index: int) -> None:
+        """Set the surface index on the last zone row. Called when user clicks a surface in the viewer."""
+        if self._zone_rows:
+            row = self._zone_rows[-1]
+            row._type_combo.setCurrentIndex(0)   # Surface
+            row._index_spin.setValue(index)
+
     # ------------------------------------------------------------------
     # Construction
     # ------------------------------------------------------------------

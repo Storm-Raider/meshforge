@@ -12,6 +12,8 @@ class MeshData:
     element_types: np.ndarray   # (E,) int32     — VTK element type per element (= 24 for C3D10)
     quality_scalars: np.ndarray = field(default_factory=lambda: np.empty(0))
     # (E,) float32 — scaled Jacobian per element; empty until QualityEngine runs
+    surface_tags: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=np.int32))
+    # (E,) int32 — Gmsh surface tag per surface element; populated only for surface meshes
 
     @property
     def node_count(self) -> int:

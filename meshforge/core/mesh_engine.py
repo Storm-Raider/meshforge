@@ -171,18 +171,23 @@ class MeshEngine:
 
         all_connectivity: list[np.ndarray] = []
         all_vtk_types: list[np.ndarray] = []
+        all_surface_tags: list[np.ndarray] = []
 
-        elem_types, elem_tags, node_tags_flat = gmsh.model.mesh.getElements(2)
-        for etype, _, ntags in zip(elem_types, elem_tags, node_tags_flat):
-            vtk_type = _GMSH_2D_TO_VTK.get(int(etype))
-            if vtk_type is None:
-                continue
-            props = gmsh.model.mesh.getElementProperties(etype)
-            nodes_per_elem = props[3]
-            ntags_arr = np.array(ntags, dtype=np.int64).reshape(-1, nodes_per_elem)
-            remapped = np.vectorize(lambda t: tag_to_idx[int(t)])(ntags_arr)
-            all_connectivity.append(remapped)
-            all_vtk_types.append(np.full(len(remapped), vtk_type, dtype=np.int32))
+        # Iterate per surface so we can record which Gmsh surface each element belongs to.
+        # This allows the viewer to highlight individual surfaces on click.
+        for _, surf_tag in gmsh.model.getEntities(2):
+            elem_types, _, node_tags_flat = gmsh.model.mesh.getElements(2, surf_tag)
+            for etype, ntags in zip(elem_types, node_tags_flat):
+                vtk_type = _GMSH_2D_TO_VTK.get(int(etype))
+                if vtk_type is None:
+                    continue
+                props = gmsh.model.mesh.getElementProperties(etype)
+                nodes_per_elem = props[3]
+                ntags_arr = np.array(ntags, dtype=np.int64).reshape(-1, nodes_per_elem)
+                remapped = np.vectorize(lambda t: tag_to_idx[int(t)])(ntags_arr)
+                all_connectivity.append(remapped)
+                all_vtk_types.append(np.full(len(remapped), vtk_type, dtype=np.int32))
+                all_surface_tags.append(np.full(len(remapped), surf_tag, dtype=np.int32))
 
         if not all_connectivity:
             raise RuntimeError("Surface mesh produced no 2D elements. Check geometry validity.")
@@ -204,6 +209,7 @@ class MeshEngine:
             nodes=nodes,
             connectivity=connectivity,
             element_types=np.concatenate(all_vtk_types),
+            surface_tags=np.concatenate(all_surface_tags),
         )
 
     def get_gmsh_log(self) -> list[str]:
