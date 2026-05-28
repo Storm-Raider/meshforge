@@ -31,13 +31,15 @@ class QualityEngine:
         e1 = v1 - v0
         e2 = v2 - v0
         e3 = v3 - v0
-        J = np.stack([e1, e2, e3], axis=-1)  # (E, 3, 3)
+        # Scalar triple product: det = e1 · (e2 × e3) — avoids LAPACK entirely
+        cross_e2_e3 = np.cross(e2, e3)                          # (E, 3)
+        det_J = np.einsum("ei,ei->e", e1, cross_e2_e3)          # (E,)
 
-        det_J = np.linalg.det(J)  # (E,)
-
-        # Denominator: product of column norms
-        col_norms = np.linalg.norm(J, axis=1)  # (E, 3)
-        denom = col_norms[:, 0] * col_norms[:, 1] * col_norms[:, 2]
+        # Column norms via einsum — no BLAS/LAPACK dependency
+        n1 = np.sqrt(np.einsum("ei,ei->e", e1, e1))
+        n2 = np.sqrt(np.einsum("ei,ei->e", e2, e2))
+        n3 = np.sqrt(np.einsum("ei,ei->e", e3, e3))
+        denom = n1 * n2 * n3
         denom = np.where(denom < 1e-12, 1e-12, denom)
 
         return (det_J / denom).astype(np.float32)

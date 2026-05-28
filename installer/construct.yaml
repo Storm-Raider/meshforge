@@ -25,5 +25,8 @@ specs:
 extra_files:
   - ../dist/meshforge-0.2.0-py3-none-any.whl: share/meshforge/meshforge-0.2.0-py3-none-any.whl
   - ../tests/fixtures/bracket_clean.step: share/meshforge/bracket_clean.step
+  # gmsh.py Python API — conda-forge gmsh ships only the DLL; the Python
+  # bindings are PyPI-only. Bundle gmsh.py so the installed env can import gmsh.
+  - gmsh.py: Lib/site-packages/gmsh.py
 
 post_install: post_install.bat
