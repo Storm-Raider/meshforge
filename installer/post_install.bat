@@ -1,26 +1,23 @@
 @echo off
-REM Post-install: pip-install the bundled meshforge wheel, then create Start Menu shortcut
+REM Post-install: pip-install the bundled meshforge wheel, then create Start Menu shortcut.
+REM %PREFIX% is set by the NSIS installer to the chosen install directory.
 
-REM Install meshforge from the bundled wheel (no internet required)
-"%PREFIX%\python.exe" -m pip install --no-index --no-deps "%PREFIX%\share\meshforge\meshforge-0.2.0-py3-none-any.whl"
+set LOGFILE=%PREFIX%\meshforge_install.log
+echo [post_install] PREFIX=%PREFIX% > "%LOGFILE%"
 
-REM Create Start Menu shortcut pointing to the console_scripts entry point
+REM Install meshforge from the bundled wheel (offline, no internet required)
+"%PREFIX%\python.exe" -m pip install --no-index --no-deps "%PREFIX%\share\meshforge\meshforge-0.2.0-py3-none-any.whl" >> "%LOGFILE%" 2>&1
+echo [post_install] pip exit code: %ERRORLEVEL% >> "%LOGFILE%"
+
+REM Create Start Menu shortcut (use full path to powershell.exe — PATH is minimal in NSIS context)
+set PS=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe
 set SHORTCUT_DIR=%APPDATA%\Microsoft\Windows\Start Menu\Programs\MeshForge
+set MESHFORGE_EXE=%PREFIX%\Scripts\meshforge.exe
+set SHORTCUT=%SHORTCUT_DIR%\MeshForge.lnk
+
 if not exist "%SHORTCUT_DIR%" mkdir "%SHORTCUT_DIR%"
 
-set SCRIPT=%TEMP%\make_shortcut.vbs
-(
-  echo Set oWS = WScript.CreateObject("WScript.Shell"^)
-  echo sLinkFile = "%SHORTCUT_DIR%\MeshForge.lnk"
-  echo Set oLink = oWS.CreateShortcut(sLinkFile^)
-  echo oLink.TargetPath = "%PREFIX%\pythonw.exe"
-  echo oLink.Arguments = "-m meshforge.main"
-  echo oLink.WorkingDirectory = "%PREFIX%"
-  echo oLink.IconLocation = "%PREFIX%\pythonw.exe,0"
-  echo oLink.Description = "MeshForge - STEP to FEA meshing"
-  echo oLink.Save
-) > "%SCRIPT%"
-cscript //nologo "%SCRIPT%"
-del "%SCRIPT%"
+"%PS%" -NoProfile -NonInteractive -Command "$s=(New-Object -ComObject WScript.Shell).CreateShortcut('%SHORTCUT%'); $s.TargetPath='%MESHFORGE_EXE%'; $s.WorkingDirectory='%PREFIX%'; $s.Description='MeshForge - STEP to FEA meshing'; $s.Save()" >> "%LOGFILE%" 2>&1
+echo [post_install] shortcut exit code: %ERRORLEVEL% >> "%LOGFILE%"
 
-echo MeshForge installed successfully.
+echo [post_install] done >> "%LOGFILE%"
