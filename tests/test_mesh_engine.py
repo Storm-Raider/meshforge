@@ -141,3 +141,26 @@ class TestMeshEngineWithFixture:
         r1 = MeshEngine(params=params_base).mesh(bracket_geo)
         r2 = MeshEngine(params=params_smooth).mesh(bracket_geo)
         assert r1.element_count == r2.element_count
+
+    def test_lintet_mesh_returns_c3d4(self, bracket_geo):
+        from meshforge.models.mesh_params import MeshParams
+        from meshforge.core.mesh_engine import VTK_QUADRATIC_TETRA
+        params = MeshParams(size_factor=2.0, mesh_type="lintet")
+        result = MeshEngine(params=params).mesh(bracket_geo)
+        assert result.element_count > 0
+        # Linear tet mesh: VTK 10 (C3D4), no quadratic tet
+        assert np.all(result.element_types == 10)
+        assert VTK_QUADRATIC_TETRA not in result.element_types
+
+    def test_lintet_connectivity_width(self, bracket_geo):
+        from meshforge.models.mesh_params import MeshParams
+        params = MeshParams(size_factor=2.0, mesh_type="lintet")
+        result = MeshEngine(params=params).mesh(bracket_geo)
+        assert result.connectivity.shape[1] == 4
+
+    def test_lintet_node_indices_valid(self, bracket_geo):
+        from meshforge.models.mesh_params import MeshParams
+        params = MeshParams(size_factor=2.0, mesh_type="lintet")
+        result = MeshEngine(params=params).mesh(bracket_geo)
+        assert result.connectivity.min() >= 0
+        assert result.connectivity.max() < result.node_count

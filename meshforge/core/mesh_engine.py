@@ -59,7 +59,7 @@ class MeshEngine:
             gmsh.model.mesh.generate(3)
             if self._params.smooth_iter > 0:
                 gmsh.model.mesh.optimize("", niter=self._params.smooth_iter)
-            if self._params.mesh_type != "hex":
+            if self._params.mesh_type == "tet":
                 gmsh.model.mesh.setOrder(2)
             return self._extract_mesh_data()
         finally:
@@ -100,7 +100,7 @@ class MeshEngine:
             gmsh.model.mesh.generate(3)
             if self._params.smooth_iter > 0:
                 gmsh.model.mesh.optimize("", niter=self._params.smooth_iter)
-            if self._params.mesh_type != "hex":
+            if self._params.mesh_type == "tet":
                 gmsh.model.mesh.setOrder(2)
             return self._extract_mesh_data()
         finally:
@@ -282,8 +282,9 @@ class MeshEngine:
 
         # Gmsh type → VTK type
         _GMSH_TO_VTK = {
-            4:  10,                 # linear tet → VTK_TETRA
+            4:  10,                 # linear tet → VTK_TETRA (C3D4)
             5:  VTK_LINEAR_HEX,     # linear hex → VTK C3D8
+            6:  13,                 # linear wedge/prism → VTK_WEDGE (C3D6, BL)
             11: VTK_QUADRATIC_TETRA # quadratic tet → VTK C3D10
         }
 

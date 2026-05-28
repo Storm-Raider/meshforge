@@ -7,8 +7,10 @@ import numpy as np
 from meshforge.models.geometry_data import GeometryData
 from meshforge.models.mesh_data import MeshData
 
+_VTK_C3D4  = 10
 _VTK_C3D10 = 24
-_VTK_C3D8 = 12
+_VTK_C3D8  = 12
+_VTK_C3D6  = 13
 
 
 class InpExporter:
@@ -83,6 +85,12 @@ class InpExporter:
             elif vtk_type == _VTK_C3D8:
                 abaqus_type = "C3D8"
                 elset = "HexElements"
+            elif vtk_type == _VTK_C3D4:
+                abaqus_type = "C3D4"
+                elset = "TetBulkElements"
+            elif vtk_type == _VTK_C3D6:
+                abaqus_type = "C3D6"
+                elset = "PrismElements"
             else:
                 continue
 
@@ -114,19 +122,12 @@ class InpExporter:
         if "*ELEMENT" not in inp_text.upper():
             warnings.append("No *ELEMENT block found in exported .inp")
 
-        has_c3d10 = bool(re.search(r"TYPE\s*=\s*C3D10\b", inp_text, re.IGNORECASE))
-        has_c3d8 = bool(re.search(r"TYPE\s*=\s*C3D8\b", inp_text, re.IGNORECASE))
-
-        if not has_c3d10 and not has_c3d8:
-            warnings.append(
-                "Export contains neither C3D10 nor C3D8 elements — "
-                "check mesh type selection."
-            )
-
-        if re.search(r"TYPE\s*=\s*C3D4\b", inp_text, re.IGNORECASE):
-            warnings.append(
-                "Export contains C3D4 first-order elements. "
-                "MeshForge should export C3D10 or C3D8 only."
-            )
+        known_types = {"C3D10", "C3D8", "C3D4", "C3D6"}
+        has_any = any(
+            bool(re.search(rf"TYPE\s*=\s*{t}\b", inp_text, re.IGNORECASE))
+            for t in known_types
+        )
+        if not has_any:
+            warnings.append("Export contains no recognized element types — check mesh type.")
 
         return warnings

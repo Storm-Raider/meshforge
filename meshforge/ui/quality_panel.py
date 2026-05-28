@@ -10,8 +10,10 @@ from PyQt6.QtGui import QFont, QPainter, QColor
 from meshforge.core.quality_engine import PASS_THRESHOLD, WARN_THRESHOLD
 from meshforge.models.mesh_data import MeshData
 
+_VTK_C3D4  = 10
 _VTK_C3D10 = 24
-_VTK_C3D8 = 12
+_VTK_C3D8  = 12
+_VTK_C3D6  = 13
 
 _N_BINS = 20
 
@@ -203,11 +205,13 @@ class QualityPanel(QWidget):
         if mesh is not None:
             self._elem_label.setText(f"{mesh.element_count:,}")
             self._node_label.setText(f"{mesh.node_count:,}")
-            unique = np.unique(mesh.element_types)
-            if len(unique) == 1 and unique[0] == _VTK_C3D10:
+            unique = set(np.unique(mesh.element_types).tolist())
+            if unique == {_VTK_C3D10}:
                 type_str = "Tet (C3D10)"
-            elif len(unique) == 1 and unique[0] == _VTK_C3D8:
+            elif unique == {_VTK_C3D8}:
                 type_str = "Hex (C3D8)"
+            elif unique == {_VTK_C3D4}:
+                type_str = "Lin. Tet (C3D4)"
             else:
                 type_str = "Mixed"
             self._type_label.setText(type_str)

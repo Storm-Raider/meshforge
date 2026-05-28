@@ -5,8 +5,10 @@ import numpy as np
 
 from meshforge.models.mesh_data import MeshData
 
+_VTK_C3D4  = 10
 _VTK_C3D10 = 24
-_VTK_C3D8 = 12
+_VTK_C3D8  = 12
+_VTK_C3D6  = 13
 
 
 class NasExporter:
@@ -76,6 +78,10 @@ class NasExporter:
                 self._write_ctetra10(lines, mesh.connectivity, indices)
             elif vtk_type == _VTK_C3D8:
                 self._write_chexa8(lines, mesh.connectivity, indices)
+            elif vtk_type == _VTK_C3D4:
+                self._write_ctetra4(lines, mesh.connectivity, indices)
+            elif vtk_type == _VTK_C3D6:
+                self._write_cpenta6(lines, mesh.connectivity, indices)
 
         lines.append("MAT1,1,210000.0,,0.3")
         lines.append("PSOLID,1,1")
@@ -101,6 +107,29 @@ class NasExporter:
             )
             lines.append(f"+,{gids[6]},{gids[7]},{gids[9]},{gids[8]}")
 
+    def _write_ctetra4(
+        self, lines: list[str], connectivity: np.ndarray, indices: np.ndarray
+    ) -> None:
+        # CTETRA-4: EID + PID + G1-G4 = 6 fields — fits on one free-field line.
+        for global_i in indices:
+            conn = connectivity[global_i]
+            gids = [str(int(n) + 1) for n in conn[:4]]
+            eid = int(global_i) + 1
+            lines.append(f"CTETRA,{eid},1,{gids[0]},{gids[1]},{gids[2]},{gids[3]}")
+
+    def _write_cpenta6(
+        self, lines: list[str], connectivity: np.ndarray, indices: np.ndarray
+    ) -> None:
+        # CPENTA-6: EID + PID + G1-G6 = 8 fields — fits on one free-field line.
+        # Gmsh type-6 wedge ordering matches Nastran CPENTA ordering — no permutation.
+        for global_i in indices:
+            conn = connectivity[global_i]
+            gids = [str(int(n) + 1) for n in conn[:6]]
+            eid = int(global_i) + 1
+            lines.append(
+                f"CPENTA,{eid},1,{gids[0]},{gids[1]},{gids[2]},{gids[3]},{gids[4]},{gids[5]}"
+            )
+
     def _write_chexa8(
         self, lines: list[str], connectivity: np.ndarray, indices: np.ndarray
     ) -> None:
@@ -123,10 +152,9 @@ class NasExporter:
         if "ENDDATA" not in nas_text:
             warnings.append("ENDDATA card missing — Nastran may refuse to read this file.")
 
-        has_ctetra = "CTETRA" in nas_text
-        has_chexa = "CHEXA" in nas_text
-        if not has_ctetra and not has_chexa:
-            warnings.append("No CTETRA or CHEXA elements found in exported .nas file.")
+        has_elements = any(kw in nas_text for kw in ("CTETRA", "CHEXA", "CPENTA"))
+        if not has_elements:
+            warnings.append("No CTETRA, CHEXA, or CPENTA elements found in exported .nas file.")
 
         warnings.append(
             "Material properties are placeholders (E=210 GPa, nu=0.3). "

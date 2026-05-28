@@ -22,6 +22,7 @@ _VOLUME_ALGOS = [
 
 _MESH_TYPES = [
     ("Tet (C3D10)", "tet"),
+    ("Linear Tet (C3D4)", "lintet"),
     ("Hex (C3D8)", "hex"),
 ]
 
@@ -96,6 +97,7 @@ class _ZoneRow(QWidget):
             size_factor=self._factor_spin.value(),
             influence_radius=self._radius_spin.value(),
         )
+
 
 
 class MeshPanel(QWidget):
@@ -274,7 +276,8 @@ class MeshPanel(QWidget):
         for name, _ in _MESH_TYPES:
             self._mesh_type_combo.addItem(name)
         self._mesh_type_combo.setToolTip(
-            "Tet (C3D10): quadratic tetrahedra — robust, works on all geometry.\n"
+            "Tet (C3D10): quadratic tetrahedra — robust, best accuracy for implicit static.\n"
+            "Linear Tet (C3D4): first-order tet — explicit dynamics, crash, fast solve.\n"
             "Hex (C3D8): linear hexahedra via barycentric subdivision — ~4x element count."
         )
         layout.addWidget(self._mesh_type_combo)
@@ -404,3 +407,4 @@ class MeshPanel(QWidget):
             self._zone_rows.remove(row)
         self._zones_layout.removeWidget(row)
         row.deleteLater()
+

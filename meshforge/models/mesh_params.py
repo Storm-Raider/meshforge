@@ -39,7 +39,9 @@ class MeshParams:
 
     refinement_zones: list[RefinementZone] = field(default_factory=list)
 
-    # "tet" → C3D10 quadratic tetrahedra; "hex" → C3D8 linear hexahedra via barycentric subdivision
+    # "tet"    → C3D10 quadratic tetrahedra (default, best accuracy)
+    # "lintet" → C3D4  linear tetrahedra (explicit dynamics, fast solve)
+    # "hex"    → C3D8  linear hexahedra via barycentric subdivision
     mesh_type: str = "tet"
 
     # Gmsh optimization passes applied after volume meshing (before setOrder).

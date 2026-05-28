@@ -135,3 +135,38 @@ class TestQualityEngineHex:
         scalars = QualityEngine().compute(multi)
         assert len(scalars) == 4
         assert np.allclose(scalars, 1.0, atol=1e-5)
+
+
+def _lintet_mesh():
+    """Pure C3D4 linear tet mesh (4-node, VTK type 10)."""
+    nodes = np.array([
+        [0.0,          0.0,          0.0],
+        [1.0,          0.0,          0.0],
+        [0.5, np.sqrt(3)/2,          0.0],
+        [0.5, np.sqrt(3)/6, np.sqrt(6)/3],
+    ], dtype=np.float64)
+    conn = np.array([[0, 1, 2, 3]], dtype=np.int64)
+    types = np.array([10], dtype=np.int32)
+    return MeshData(nodes=nodes, connectivity=conn, element_types=types)
+
+
+class TestQualityEngineLinTet:
+    def test_lintet_returns_one_scalar(self):
+        mesh = _lintet_mesh()
+        scalars = QualityEngine().compute(mesh)
+        assert len(scalars) == 1
+
+    def test_lintet_equilateral_quality_is_high(self):
+        mesh = _lintet_mesh()
+        scalars = QualityEngine().compute(mesh)
+        assert scalars[0] == pytest.approx(np.sqrt(2) / 2, abs=1e-5)
+
+    def test_lintet_returns_float32(self):
+        mesh = _lintet_mesh()
+        scalars = QualityEngine().compute(mesh)
+        assert scalars.dtype == np.float32
+
+    def test_lintet_passes_threshold(self):
+        mesh = _lintet_mesh()
+        scalars = QualityEngine().compute(mesh)
+        assert scalars[0] > PASS_THRESHOLD  # √2/2 ≈ 0.707 > 0.3

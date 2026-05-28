@@ -7,8 +7,12 @@ PASS_THRESHOLD = 0.3
 WARN_THRESHOLD = 0.1
 
 # VTK type codes
-_VTK_C3D10 = 24
-_VTK_C3D8 = 12
+_VTK_C3D4  = 10   # 4-node linear tet (bulk element in BL meshes)
+_VTK_C3D10 = 24   # 10-node quadratic tet
+_VTK_C3D8  = 12   # 8-node linear hex
+_VTK_C3D6  = 13   # 6-node linear wedge/prism (BL layer element)
+
+_VTK_TET_TYPES = (_VTK_C3D4, _VTK_C3D10)
 
 # For each of the 8 hex corners (VTK type-12 ordering), the indices of the 3
 # adjacent nodes that produce a positive Jacobian on a valid (non-inverted) hex.
@@ -34,31 +38,39 @@ class QualityEngine:
     """
 
     def compute(self, mesh: MeshData) -> np.ndarray:
-        """Return float32 array of shape (E,) with one Jacobian value per element."""
+        """Return float32 array of shape (E,) with one Jacobian value per element.
+
+        Prism elements (C3D6 from BL layers) are assigned quality=1.0 —
+        they are structured by construction and excluded from histogram stats.
+        """
         unique_types = np.unique(mesh.element_types)
         if len(unique_types) == 1 and unique_types[0] == _VTK_C3D8:
             return self._compute_hex(mesh)
-        return self._compute_tet(mesh)
 
-    def _compute_tet(self, mesh: MeshData) -> np.ndarray:
-        """Scaled Jacobian for C3D10 tets using the first 4 corner nodes."""
-        nodes = mesh.nodes                  # (N, 3)
-        conn = mesh.connectivity[:, :4]    # (E, 4)
+        # Pure or mixed tet mesh (C3D4, C3D10, C3D6 prisms from BL)
+        scalars = np.ones(len(mesh.element_types), dtype=np.float32)
+        tet_mask = np.isin(mesh.element_types, list(_VTK_TET_TYPES))
+        if np.any(tet_mask):
+            scalars[tet_mask] = self._compute_tet_corners(
+                mesh.nodes, mesh.connectivity[tet_mask, :4]
+            )
+        return scalars
 
-        v0 = nodes[conn[:, 0]]
-        v1 = nodes[conn[:, 1]]
-        v2 = nodes[conn[:, 2]]
-        v3 = nodes[conn[:, 3]]
+    def _compute_tet_corners(self, nodes: np.ndarray, conn4: np.ndarray) -> np.ndarray:
+        """Scaled Jacobian for tets given (E,4) corner-only connectivity."""
+        v0 = nodes[conn4[:, 0]]
+        v1 = nodes[conn4[:, 1]]
+        v2 = nodes[conn4[:, 2]]
+        v3 = nodes[conn4[:, 3]]
 
         e1 = v1 - v0
         e2 = v2 - v0
         e3 = v3 - v0
 
-        # Scaled Jacobian via scalar triple product — avoids BLAS/LAPACK entirely
-        cross_e2_e3 = np.cross(e2, e3)                          # (E, 3)
-        det_J = np.einsum("ei,ei->e", e1, cross_e2_e3)          # (E,)
+        # Scalar triple product — avoids BLAS/LAPACK entirely
+        cross_e2_e3 = np.cross(e2, e3)
+        det_J = np.einsum("ei,ei->e", e1, cross_e2_e3)
 
-        # Column norms via einsum — no BLAS/LAPACK dependency
         n1 = np.sqrt(np.einsum("ei,ei->e", e1, e1))
         n2 = np.sqrt(np.einsum("ei,ei->e", e2, e2))
         n3 = np.sqrt(np.einsum("ei,ei->e", e3, e3))
@@ -66,6 +78,10 @@ class QualityEngine:
         denom = np.where(denom < 1e-12, 1e-12, denom)
 
         return (det_J / denom).astype(np.float32)
+
+    def _compute_tet(self, mesh: MeshData) -> np.ndarray:
+        """Scaled Jacobian for C3D10 tets using the first 4 corner nodes."""
+        return self._compute_tet_corners(mesh.nodes, mesh.connectivity[:, :4])
 
     def _compute_hex(self, mesh: MeshData) -> np.ndarray:
         """Scaled Jacobian for C3D8 hexes: min over all 8 corners."""
