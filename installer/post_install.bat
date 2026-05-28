@@ -6,7 +6,7 @@ set LOGFILE=%PREFIX%\meshforge_install.log
 echo [post_install] PREFIX=%PREFIX% > "%LOGFILE%"
 
 REM Install meshforge from the bundled wheel (offline, no internet required)
-"%PREFIX%\python.exe" -m pip install --no-index --no-deps "%PREFIX%\share\meshforge\meshforge-0.2.0-py3-none-any.whl" >> "%LOGFILE%" 2>&1
+"%PREFIX%\python.exe" -m pip install --no-index --no-deps "%PREFIX%\share\meshforge\meshforge-0.3.0-py3-none-any.whl" >> "%LOGFILE%" 2>&1
 echo [post_install] pip exit code: %ERRORLEVEL% >> "%LOGFILE%"
 
 REM Create Start Menu shortcut (use full path to powershell.exe — PATH is minimal in NSIS context)

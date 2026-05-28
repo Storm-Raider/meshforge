@@ -1,5 +1,5 @@
 name: MeshForge
-version: 0.2.0
+version: 0.3.0
 
 installer_type: exe
 company: MeshForge
@@ -23,7 +23,7 @@ specs:
 # meshforge wheel + sample geometry bundled into share/meshforge/
 # post_install.bat pip-installs the wheel after the conda env is set up.
 extra_files:
-  - ../dist/meshforge-0.2.0-py3-none-any.whl: share/meshforge/meshforge-0.2.0-py3-none-any.whl
+  - ../dist/meshforge-0.3.0-py3-none-any.whl: share/meshforge/meshforge-0.3.0-py3-none-any.whl
   - ../tests/fixtures/bracket_clean.step: share/meshforge/bracket_clean.step
   # gmsh.py Python API — conda-forge gmsh ships only the DLL; the Python
   # bindings are PyPI-only. Bundle gmsh.py so the installed env can import gmsh.

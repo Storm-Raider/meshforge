@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "meshforge"
-version = "0.2.0"
+version = "0.3.0"
 requires-python = ">=3.11"
 description = "Professional CAE meshing: STEP → C3D10 tet mesh → quality → Abaqus .inp"
 

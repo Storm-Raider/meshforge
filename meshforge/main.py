@@ -43,7 +43,7 @@ def _check_opengl() -> bool:
 def main() -> None:
     app = QApplication(sys.argv)
     app.setApplicationName("MeshForge")
-    app.setApplicationVersion("0.2.0")
+    app.setApplicationVersion("0.3.0")
     app.setOrganizationName("MeshForge")
 
     # GPU / OpenGL startup check
