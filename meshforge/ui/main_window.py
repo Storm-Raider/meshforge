@@ -332,7 +332,7 @@ class MainWindow(QMainWindow):
             self._vtk_viewer.display_mesh(surface_polydata, quality_scalars, grid)
 
             summary = QualityEngine().summary(quality_scalars)
-            self._quality_panel.update_summary(summary)
+            self._quality_panel.update_summary(summary, self._mesh)
             self._model_tree.set_quality(summary)
 
             state = _SUCCESS if summary["fail"] == 0 else _PARTIAL

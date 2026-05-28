@@ -8,6 +8,10 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QPainter, QColor
 
 from meshforge.core.quality_engine import PASS_THRESHOLD, WARN_THRESHOLD
+from meshforge.models.mesh_data import MeshData
+
+_VTK_C3D10 = 24
+_VTK_C3D8 = 12
 
 _N_BINS = 20
 
@@ -86,9 +90,27 @@ class QualityPanel(QWidget):
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
 
-        title = QLabel("Quality")
-        title.setStyleSheet("font-weight: bold; color: #aaa;")
-        layout.addWidget(title)
+        # ── Mesh statistics ───────────────────────────────────────────
+        mesh_title = QLabel("Mesh")
+        mesh_title.setStyleSheet("font-weight: bold; color: #aaa;")
+        layout.addWidget(mesh_title)
+
+        self._mesh_frame = QFrame()
+        self._mesh_frame.setFrameShape(QFrame.Shape.StyledPanel)
+        mesh_layout = QVBoxLayout(self._mesh_frame)
+        mesh_layout.setContentsMargins(6, 6, 6, 6)
+        mesh_layout.setSpacing(4)
+
+        self._elem_label = self._stat_row(mesh_layout, "Elements", "#ccc")
+        self._node_label = self._stat_row(mesh_layout, "Nodes", "#ccc")
+        self._type_label = self._stat_row(mesh_layout, "Type", "#ccc")
+
+        layout.addWidget(self._mesh_frame)
+
+        # ── Quality ───────────────────────────────────────────────────
+        qual_title = QLabel("Quality")
+        qual_title.setStyleSheet("font-weight: bold; color: #aaa;")
+        layout.addWidget(qual_title)
 
         # Stats grid
         self._stats_frame = QFrame()
@@ -171,11 +193,26 @@ class QualityPanel(QWidget):
         self._threshold_value_label.setText(f"{lo:.2f}")
         self.threshold_changed.emit(lo, 1.0)
 
-    def update_summary(self, summary: dict) -> None:
+    def update_summary(self, summary: dict, mesh: MeshData | None = None) -> None:
         n = summary["element_count"]
         if n == 0:
             self.set_empty()
             return
+
+        # Mesh stats
+        if mesh is not None:
+            self._elem_label.setText(f"{mesh.element_count:,}")
+            self._node_label.setText(f"{mesh.node_count:,}")
+            unique = np.unique(mesh.element_types)
+            if len(unique) == 1 and unique[0] == _VTK_C3D10:
+                type_str = "Tet (C3D10)"
+            elif len(unique) == 1 and unique[0] == _VTK_C3D8:
+                type_str = "Hex (C3D8)"
+            else:
+                type_str = "Mixed"
+            self._type_label.setText(type_str)
+
+        # Quality stats
         self._pass_label.setText(f"{summary['pass']:,}  ({summary['pass_pct']:.1f}%)")
         self._warn_label.setText(f"{summary['warn']:,}")
         self._fail_label.setText(f"{summary['fail']:,}")
@@ -186,7 +223,8 @@ class QualityPanel(QWidget):
         self._isolate_cb.setEnabled(True)
 
     def set_empty(self) -> None:
-        for lbl in (self._pass_label, self._warn_label, self._fail_label,
+        for lbl in (self._elem_label, self._node_label, self._type_label,
+                    self._pass_label, self._warn_label, self._fail_label,
                     self._min_label, self._mean_label):
             lbl.setText("—")
         self._histogram.set_data(None)
