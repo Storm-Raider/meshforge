@@ -99,6 +99,7 @@ class MainWindow(QMainWindow):
         self._quality_panel = QualityPanel()
         self._quality_panel.threshold_changed.connect(self._vtk_viewer.set_threshold)
         self._quality_panel.isolate_changed.connect(self._vtk_viewer.set_isolate_failures)
+        self._quality_panel.edges_changed.connect(self._vtk_viewer.set_edges_visible)
         splitter.addWidget(self._quality_panel)
 
         splitter.setStretchFactor(0, 0)
@@ -160,6 +161,11 @@ class MainWindow(QMainWindow):
         bug_action = QAction("Report a Bug", self)
         bug_action.triggered.connect(lambda: QDesktopServices.openUrl(QUrl(_GITHUB_ISSUES)))
         help_menu.addAction(bug_action)
+
+        shortcuts_action = QAction("Keyboard Shortcuts", self)
+        shortcuts_action.setShortcut("?")
+        shortcuts_action.triggered.connect(self._show_shortcuts)
+        help_menu.addAction(shortcuts_action)
 
         help_menu.addSeparator()
         about_action = QAction("About MeshForge", self)
@@ -271,6 +277,7 @@ class MainWindow(QMainWindow):
             return
 
         filename = Path(self._current_file).name
+        self.setWindowTitle(f"MeshForge — {filename}")
         self._model_tree.set_geometry(geo, filename)
         self._mesh_panel.set_geometry(geo)
         self._log_panel.append(
@@ -457,12 +464,27 @@ class MainWindow(QMainWindow):
     # About dialog
     # ------------------------------------------------------------------
 
+    def _show_shortcuts(self) -> None:
+        QMessageBox.information(
+            self, "Keyboard Shortcuts",
+            "<table cellspacing='4'>"
+            "<tr><td><b>F</b></td><td>Fit all — reset camera to show the full mesh</td></tr>"
+            "<tr><td><b>1</b></td><td>Front view (Y−)</td></tr>"
+            "<tr><td><b>3</b></td><td>Right view (X+)</td></tr>"
+            "<tr><td><b>7</b></td><td>Top view (Z+)</td></tr>"
+            "<tr><td><b>Ctrl+O</b></td><td>Open STEP file</td></tr>"
+            "<tr><td><b>Ctrl+E</b></td><td>Export mesh</td></tr>"
+            "<tr><td><b>?</b></td><td>Show this dialog</td></tr>"
+            "</table>"
+            "<br><small>In Surface Preview mode, click any surface triangle to identify it.</small>"
+        )
+
     def _show_about(self) -> None:
         QMessageBox.about(
             self,
             "About MeshForge",
             f"<b>MeshForge</b> v{meshforge.__version__}<br><br>"
-            "Professional CAE meshing: STEP → C3D10 tet mesh → quality → Abaqus .inp<br><br>"
+            "STEP → tet/hex mesh → quality → Abaqus .inp / Nastran .nas<br><br>"
             "<b>Open source components:</b><br>"
             "• pythonocc-core (LGPL 2.1)<br>"
             "• Gmsh API (LGPL 2+)<br>"
@@ -484,5 +506,6 @@ class MainWindow(QMainWindow):
         self._geo = None
         self._mesh = None
         self._current_file = ""
+        self.setWindowTitle("MeshForge")
         self._mesh_panel.set_geometry_defaults(0.0)
         self._set_state(_EMPTY)

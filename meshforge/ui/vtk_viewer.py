@@ -157,6 +157,15 @@ class VtkViewer(QWidget):
         interactor.AddObserver("LeftButtonPressEvent", self._on_left_press)
         interactor.AddObserver("LeftButtonReleaseEvent", self._on_left_release)
 
+        # Axes orientation marker — bottom-left corner, non-interactive
+        axes = vtk.vtkAxesActor()
+        self._orientation_widget = vtk.vtkOrientationMarkerWidget()
+        self._orientation_widget.SetOrientationMarker(axes)
+        self._orientation_widget.SetInteractor(interactor)
+        self._orientation_widget.SetViewport(0.0, 0.0, 0.13, 0.13)
+        self._orientation_widget.SetEnabled(True)
+        self._orientation_widget.InteractiveOff()
+
     def _build_lut(self) -> vtk.vtkLookupTable:
         lut = vtk.vtkLookupTable()
         lut.SetNumberOfColors(256)
@@ -167,9 +176,21 @@ class VtkViewer(QWidget):
         lut.Build()
         return lut
 
+    def set_edges_visible(self, enabled: bool) -> None:
+        """Toggle mesh edge lines on the volume mesh actor."""
+        prop = self._actor.GetProperty()
+        if enabled:
+            prop.EdgeVisibilityOn()
+            prop.SetEdgeColor(0.25, 0.25, 0.25)
+            prop.SetLineWidth(0.6)
+        else:
+            prop.EdgeVisibilityOff()
+        self._vtk_widget.GetRenderWindow().Render()
+
     def display_mesh(self, surface_polydata, quality_scalars: np.ndarray, grid) -> None:
         self._picking_enabled = False
         self._highlight_actor.SetVisibility(False)
+        self._vtk_widget.unsetCursor()
         """Called from main thread after QualityWorker emits scalars_ready.
 
         surface_polydata already carries per-surface-cell Jacobian scalars
@@ -217,6 +238,10 @@ class VtkViewer(QWidget):
         self._renderer.ResetCamera()
 
         self._picking_enabled = polydata.GetCellData().GetArray("SurfaceTag") is not None
+        if self._picking_enabled:
+            self._vtk_widget.setCursor(Qt.CursorShape.CrossCursor)
+        else:
+            self._vtk_widget.unsetCursor()
 
         self._empty_label.hide()
         self._vtk_widget.GetRenderWindow().Render()
@@ -242,6 +267,7 @@ class VtkViewer(QWidget):
     def clear(self) -> None:
         self._grid = None
         self._picking_enabled = False
+        self._vtk_widget.unsetCursor()
         self._actor.SetVisibility(False)
         self._isolate_actor.SetVisibility(False)
         self._highlight_actor.SetVisibility(False)

@@ -79,6 +79,7 @@ class QualityPanel(QWidget):
 
     threshold_changed = pyqtSignal(float, float)
     isolate_changed = pyqtSignal(bool)
+    edges_changed = pyqtSignal(bool)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -174,6 +175,13 @@ class QualityPanel(QWidget):
         self._isolate_cb.toggled.connect(self.isolate_changed)
         layout.addWidget(self._isolate_cb)
 
+        # Show mesh edge lines
+        self._edges_cb = QCheckBox("Show mesh edges")
+        self._edges_cb.setToolTip("Overlay element edge lines on the mesh surface.")
+        self._edges_cb.setEnabled(False)
+        self._edges_cb.toggled.connect(self.edges_changed)
+        layout.addWidget(self._edges_cb)
+
         layout.addStretch()
 
     def _stat_row(self, parent_layout, label_text: str, color: str) -> QLabel:
@@ -225,6 +233,7 @@ class QualityPanel(QWidget):
         self._histogram.set_data(summary.get("scalars"))
         self._slider.setEnabled(True)
         self._isolate_cb.setEnabled(True)
+        self._edges_cb.setEnabled(True)
 
     def set_empty(self) -> None:
         for lbl in (self._elem_label, self._node_label, self._type_label,
@@ -237,3 +246,5 @@ class QualityPanel(QWidget):
         self._threshold_value_label.setText("0.00")
         self._isolate_cb.setChecked(False)
         self._isolate_cb.setEnabled(False)
+        self._edges_cb.setChecked(False)
+        self._edges_cb.setEnabled(False)
