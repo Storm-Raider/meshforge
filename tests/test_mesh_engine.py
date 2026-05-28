@@ -94,3 +94,33 @@ class TestMeshEngineWithFixture:
         params = MeshParams(size_factor=2.0, refinement_zones=[stale_zone])
         result = MeshEngine(params=params).mesh(bracket_geo)
         assert result.element_count > 0
+
+    def test_hex_mesh_returns_mesh_data(self, bracket_geo):
+        from meshforge.models.mesh_params import MeshParams
+        from meshforge.models.mesh_data import MeshData
+        from meshforge.core.mesh_engine import VTK_LINEAR_HEX
+        params = MeshParams(size_factor=2.0, mesh_type="hex")
+        result = MeshEngine(params=params).mesh(bracket_geo)
+        assert isinstance(result, MeshData)
+        assert result.element_count > 0
+        assert result.node_count > 0
+
+    def test_hex_mesh_connectivity_width(self, bracket_geo):
+        from meshforge.models.mesh_params import MeshParams
+        params = MeshParams(size_factor=2.0, mesh_type="hex")
+        result = MeshEngine(params=params).mesh(bracket_geo)
+        assert result.connectivity.shape[1] == 8
+
+    def test_hex_mesh_element_types_all_c3d8(self, bracket_geo):
+        from meshforge.models.mesh_params import MeshParams
+        from meshforge.core.mesh_engine import VTK_LINEAR_HEX
+        params = MeshParams(size_factor=2.0, mesh_type="hex")
+        result = MeshEngine(params=params).mesh(bracket_geo)
+        assert np.all(result.element_types == VTK_LINEAR_HEX)
+
+    def test_hex_mesh_node_indices_valid(self, bracket_geo):
+        from meshforge.models.mesh_params import MeshParams
+        params = MeshParams(size_factor=2.0, mesh_type="hex")
+        result = MeshEngine(params=params).mesh(bracket_geo)
+        assert result.connectivity.min() >= 0
+        assert result.connectivity.max() < result.node_count

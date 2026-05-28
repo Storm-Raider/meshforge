@@ -7,11 +7,15 @@ import numpy as np
 from meshforge.models.geometry_data import GeometryData
 from meshforge.models.mesh_data import MeshData
 
+_VTK_C3D10 = 24
+_VTK_C3D8 = 12
+
 
 class InpExporter:
     """Exports MeshData to Abaqus .inp format.
 
     No Qt imports. Writes directly from MeshData — no re-meshing.
+    Supports C3D10 (quadratic tet) and C3D8 (linear hex) element types.
     """
 
     def export(self, mesh: MeshData, geo: GeometryData, dest_path: str | Path) -> list[str]:
@@ -57,10 +61,6 @@ class InpExporter:
             )
 
     def _generate_inp(self, mesh: MeshData, geo: GeometryData) -> str:
-        """Write Abaqus .inp directly from MeshData — no re-meshing.
-
-        Exports the exact mesh that was quality-checked and rendered.
-        """
         lines: list[str] = []
         lines.append("*Heading")
         lines.append(" MeshForge export")
@@ -69,14 +69,36 @@ class InpExporter:
         for i, (x, y, z) in enumerate(mesh.nodes, 1):
             lines.append(f"{i}, {x:.10g}, {y:.10g}, {z:.10g}")
 
-        # C3D10: 10-node quadratic tet — connectivity is (E, 10) int64, 0-based
-        lines.append("*ELEMENT, type=C3D10, ELSET=Solid")
-        for i, conn in enumerate(mesh.connectivity, 1):
-            node_ids = ", ".join(str(int(n) + 1) for n in conn)
-            lines.append(f"{i}, {node_ids}")
+        # Group elements by VTK type
+        unique_types = np.unique(mesh.element_types)
+        elset_names: list[str] = []
 
-        lines.append("*ELSET, ELSET=Solid, GENERATE")
-        lines.append(f"1, {mesh.element_count}")
+        for vtk_type in unique_types:
+            mask = mesh.element_types == vtk_type
+            indices = np.where(mask)[0]
+
+            if vtk_type == _VTK_C3D10:
+                abaqus_type = "C3D10"
+                elset = "TetElements"
+            elif vtk_type == _VTK_C3D8:
+                abaqus_type = "C3D8"
+                elset = "HexElements"
+            else:
+                continue
+
+            elset_names.append(elset)
+            lines.append(f"*ELEMENT, type={abaqus_type}, ELSET={elset}")
+            for local_i, global_i in enumerate(indices, 1):
+                conn = mesh.connectivity[global_i]
+                # Strip -1 padding (mixed connectivity) and use only valid nodes
+                valid = conn[conn >= 0]
+                node_ids = ", ".join(str(int(n) + 1) for n in valid)
+                lines.append(f"{global_i}, {node_ids}")
+
+        if elset_names:
+            # Combine all element sets into one "Solid" set
+            lines.append(f"*ELSET, ELSET=Solid")
+            lines.append(", ".join(elset_names))
 
         lines.append("*NSET, NSET=AllNodes, GENERATE")
         lines.append(f"1, {mesh.node_count}")
@@ -84,7 +106,6 @@ class InpExporter:
         return "\n".join(lines) + "\n"
 
     def _validate(self, inp_text: str, mesh: MeshData) -> list[str]:
-        """Run CalculiX-compatibility checks. Returns warning strings."""
         warnings = []
 
         if "*NODE" not in inp_text.upper():
@@ -93,16 +114,19 @@ class InpExporter:
         if "*ELEMENT" not in inp_text.upper():
             warnings.append("No *ELEMENT block found in exported .inp")
 
-        if not re.search(r"TYPE\s*=\s*C3D10\b", inp_text, re.IGNORECASE):
+        has_c3d10 = bool(re.search(r"TYPE\s*=\s*C3D10\b", inp_text, re.IGNORECASE))
+        has_c3d8 = bool(re.search(r"TYPE\s*=\s*C3D8\b", inp_text, re.IGNORECASE))
+
+        if not has_c3d10 and not has_c3d8:
             warnings.append(
-                "Export does not contain C3D10 elements — structural FEA requires "
-                "quadratic tetrahedral elements."
+                "Export contains neither C3D10 nor C3D8 elements — "
+                "check mesh type selection."
             )
 
         if re.search(r"TYPE\s*=\s*C3D4\b", inp_text, re.IGNORECASE):
             warnings.append(
                 "Export contains C3D4 first-order elements. "
-                "MeshForge should export C3D10 only."
+                "MeshForge should export C3D10 or C3D8 only."
             )
 
         return warnings

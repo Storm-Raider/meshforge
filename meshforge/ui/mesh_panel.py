@@ -20,6 +20,11 @@ _VOLUME_ALGOS = [
     ("HXT (fast)", 9),
 ]
 
+_MESH_TYPES = [
+    ("Tet (C3D10)", "tet"),
+    ("Hex (C3D8)", "hex"),
+]
+
 
 class _ZoneRow(QWidget):
     """One refinement zone row: entity selector + size factor + radius + remove."""
@@ -127,6 +132,7 @@ class MeshPanel(QWidget):
             surface_algorithm=_SURFACE_ALGOS[self._surf_combo.currentIndex()][1],
             volume_algorithm=_VOLUME_ALGOS[self._vol_combo.currentIndex()][1],
             refinement_zones=[row.get_zone() for row in self._zone_rows],
+            mesh_type=_MESH_TYPES[self._mesh_type_combo.currentIndex()][1],
         )
 
     def set_geometry_defaults(self, target_size: float) -> None:
@@ -260,6 +266,17 @@ class MeshPanel(QWidget):
             "HXT: faster on large models but may fail on multi-body assemblies."
         )
         layout.addWidget(self._vol_combo)
+
+        # Element type
+        layout.addWidget(self._make_label("Element type"))
+        self._mesh_type_combo = QComboBox()
+        for name, _ in _MESH_TYPES:
+            self._mesh_type_combo.addItem(name)
+        self._mesh_type_combo.setToolTip(
+            "Tet (C3D10): quadratic tetrahedra — robust, works on all geometry.\n"
+            "Hex (C3D8): linear hexahedra via barycentric subdivision — ~4x element count."
+        )
+        layout.addWidget(self._mesh_type_combo)
 
         # Refinement Zones
         zones_group = QGroupBox("Refinement Zones")

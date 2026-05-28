@@ -146,3 +146,70 @@ class TestNasExporterCtetra10Continuation:
         cont = lines[ctetra_idx + 1].split(",")
         gids = first[3:] + cont[1:]  # skip CTETRA+EID+PID on first, skip '+' on cont
         assert len(gids) == 10, f"Expected 10 GIDs total, got {len(gids)}"
+
+
+def _make_hex_mesh() -> MeshData:
+    """Unit cube as one C3D8 element (8 nodes, VTK type 12)."""
+    nodes = np.array([
+        [0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [1.0, 1.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],
+        [1.0, 0.0, 1.0],
+        [1.0, 1.0, 1.0],
+        [0.0, 1.0, 1.0],
+    ], dtype=np.float64)
+    connectivity = np.array([[0, 1, 2, 3, 4, 5, 6, 7]], dtype=np.int64)
+    element_types = np.array([12], dtype=np.int32)
+    return MeshData(nodes=nodes, connectivity=connectivity, element_types=element_types)
+
+
+class TestNasExporterChexa8:
+    def test_chexa_written(self, tmp_nas):
+        mesh = _make_hex_mesh()
+        NasExporter().export(mesh, tmp_nas)
+        text = tmp_nas.read_text()
+        assert "CHEXA" in text
+
+    def test_chexa_first_line_has_eight_data_fields(self, tmp_nas):
+        mesh = _make_hex_mesh()
+        NasExporter().export(mesh, tmp_nas)
+        lines = tmp_nas.read_text().splitlines()
+        chexa_line = next(l for l in lines if l.startswith("CHEXA,"))
+        parts = chexa_line.rstrip(",").split(",")
+        data_fields = parts[1:]  # skip "CHEXA" keyword
+        assert len(data_fields) == 8, f"Expected EID+PID+G1-G6 = 8, got {len(data_fields)}: {chexa_line}"
+
+    def test_chexa_continuation_has_two_nodes(self, tmp_nas):
+        mesh = _make_hex_mesh()
+        NasExporter().export(mesh, tmp_nas)
+        lines = tmp_nas.read_text().splitlines()
+        chexa_idx = next(i for i, l in enumerate(lines) if l.startswith("CHEXA,"))
+        cont = lines[chexa_idx + 1]
+        assert cont.startswith("+,")
+        parts = cont.split(",")
+        assert len(parts) == 3, f"Expected '+' + G7 + G8 = 3 parts, got {len(parts)}: {cont}"
+
+    def test_chexa_all_eight_nodes_covered(self, tmp_nas):
+        mesh = _make_hex_mesh()
+        NasExporter().export(mesh, tmp_nas)
+        lines = tmp_nas.read_text().splitlines()
+        chexa_idx = next(i for i, l in enumerate(lines) if l.startswith("CHEXA,"))
+        first = lines[chexa_idx].rstrip(",").split(",")
+        cont = lines[chexa_idx + 1].split(",")
+        gids = first[3:] + cont[1:]  # skip CHEXA+EID+PID; skip '+'
+        assert len(gids) == 8
+
+    def test_chexa_node_ids_one_based(self, tmp_nas):
+        mesh = _make_hex_mesh()
+        NasExporter().export(mesh, tmp_nas)
+        lines = tmp_nas.read_text().splitlines()
+        chexa_line = next(l for l in lines if l.startswith("CHEXA,"))
+        parts = chexa_line.rstrip(",").split(",")
+        assert int(parts[2]) >= 1  # first GID is 1-based
+
+    def test_enddata_present(self, tmp_nas):
+        mesh = _make_hex_mesh()
+        NasExporter().export(mesh, tmp_nas)
+        assert "ENDDATA" in tmp_nas.read_text()

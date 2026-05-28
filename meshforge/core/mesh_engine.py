@@ -9,6 +9,8 @@ from meshforge.models.mesh_params import MeshParams
 
 # VTK element type for 10-node quadratic tetrahedron (C3D10)
 VTK_QUADRATIC_TETRA = 24
+# VTK element type for 8-node linear hexahedron (C3D8)
+VTK_LINEAR_HEX = 12
 
 _GMSH_LOCK = threading.Lock()
 
@@ -55,7 +57,8 @@ class MeshEngine:
 
             self._set_options(default_element_size)
             gmsh.model.mesh.generate(3)
-            gmsh.model.mesh.setOrder(2)
+            if self._params.mesh_type != "hex":
+                gmsh.model.mesh.setOrder(2)
             return self._extract_mesh_data()
         finally:
             try:
@@ -93,7 +96,8 @@ class MeshEngine:
             self._load_shape(geo)
             self._set_options(geo.default_element_size())
             gmsh.model.mesh.generate(3)
-            gmsh.model.mesh.setOrder(2)
+            if self._params.mesh_type != "hex":
+                gmsh.model.mesh.setOrder(2)
             return self._extract_mesh_data()
         finally:
             # Capture log before finalize — logger is unavailable after finalize()
@@ -228,6 +232,8 @@ class MeshEngine:
         gmsh.option.setNumber("Mesh.MeshSizeFromCurvature", p.curvature_refinement)
         gmsh.option.setNumber("Mesh.Algorithm", p.surface_algorithm)
         gmsh.option.setNumber("Mesh.Algorithm3D", p.volume_algorithm)
+        # Barycentric subdivision: converts every tet → 4 linear hexes (all-hex mesh)
+        gmsh.option.setNumber("Mesh.SubdivisionAlgorithm", 2 if p.mesh_type == "hex" else 0)
 
         if p.refinement_zones:
             curve_tags = [t for _, t in gmsh.model.getEntities(1)]
@@ -265,24 +271,45 @@ class MeshEngine:
         nodes = np.array(coords, dtype=np.float64).reshape(-1, 3)
         tag_to_idx = {int(t): i for i, t in enumerate(node_tags)}
 
-        # 3D elements (C3D10 = gmsh type 11 after setOrder(2))
         elem_types, elem_tags, node_tags_flat = gmsh.model.mesh.getElements(3)
 
         if len(elem_types) == 0:
             raise RuntimeError("Gmsh produced no 3D elements. Check geometry validity.")
 
-        all_connectivity = []
+        # Gmsh type → VTK type
+        _GMSH_TO_VTK = {
+            4:  10,                 # linear tet → VTK_TETRA
+            5:  VTK_LINEAR_HEX,     # linear hex → VTK C3D8
+            11: VTK_QUADRATIC_TETRA # quadratic tet → VTK C3D10
+        }
+
+        all_connectivity: list[np.ndarray] = []
+        all_vtk_types: list[np.ndarray] = []
+
         for etype, _, ntags in zip(elem_types, elem_tags, node_tags_flat):
             props = gmsh.model.mesh.getElementProperties(etype)
             nodes_per_elem = props[3]
             ntags_arr = np.array(ntags, dtype=np.int64).reshape(-1, nodes_per_elem)
-            # Remap gmsh 1-based tags to 0-based indices
             remapped = np.vectorize(lambda t: tag_to_idx[int(t)])(ntags_arr)
+            vtk_type = _GMSH_TO_VTK.get(int(etype), 0)
             all_connectivity.append(remapped)
+            all_vtk_types.append(np.full(len(remapped), vtk_type, dtype=np.int32))
 
-        connectivity = np.vstack(all_connectivity)
-        n_elem = len(connectivity)
-        element_types = np.full(n_elem, VTK_QUADRATIC_TETRA, dtype=np.int32)
+        # Pad to uniform width if multiple element types have different node counts
+        widths = [c.shape[1] for c in all_connectivity]
+        if len(set(widths)) == 1:
+            connectivity = np.vstack(all_connectivity)
+        else:
+            max_w = max(widths)
+            padded = []
+            for c in all_connectivity:
+                if c.shape[1] < max_w:
+                    pad = np.full((len(c), max_w - c.shape[1]), -1, dtype=np.int64)
+                    c = np.hstack([c, pad])
+                padded.append(c)
+            connectivity = np.vstack(padded)
+
+        element_types = np.concatenate(all_vtk_types)
 
         return MeshData(
             nodes=nodes,

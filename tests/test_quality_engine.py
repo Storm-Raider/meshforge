@@ -91,3 +91,47 @@ class TestQualityEngineSummary:
         assert s["min"] == pytest.approx(0.1, abs=1e-4)
         assert s["mean"] == pytest.approx(0.5, abs=1e-4)
         assert s["max"] == pytest.approx(0.9, abs=1e-4)
+
+
+def _unit_cube_hex():
+    """Single C3D8 unit-cube element (VTK type 12)."""
+    nodes = np.array([
+        [0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [1.0, 1.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],
+        [1.0, 0.0, 1.0],
+        [1.0, 1.0, 1.0],
+        [0.0, 1.0, 1.0],
+    ], dtype=np.float64)
+    conn = np.array([[0, 1, 2, 3, 4, 5, 6, 7]], dtype=np.int64)
+    types = np.array([12], dtype=np.int32)
+    return MeshData(nodes=nodes, connectivity=conn, element_types=types)
+
+
+class TestQualityEngineHex:
+    def test_unit_cube_quality_is_one(self):
+        mesh = _unit_cube_hex()
+        scalars = QualityEngine().compute(mesh)
+        assert len(scalars) == 1
+        assert scalars[0] == pytest.approx(1.0, abs=1e-5)
+
+    def test_unit_cube_returns_float32(self):
+        mesh = _unit_cube_hex()
+        scalars = QualityEngine().compute(mesh)
+        assert scalars.dtype == np.float32
+
+    def test_unit_cube_passes_threshold(self):
+        mesh = _unit_cube_hex()
+        scalars = QualityEngine().compute(mesh)
+        assert scalars[0] > PASS_THRESHOLD
+
+    def test_multiple_hex_elements(self):
+        mesh = _unit_cube_hex()
+        conn = np.tile(mesh.connectivity, (4, 1))
+        types = np.tile(mesh.element_types, 4)
+        multi = MeshData(nodes=mesh.nodes, connectivity=conn, element_types=types)
+        scalars = QualityEngine().compute(multi)
+        assert len(scalars) == 4
+        assert np.allclose(scalars, 1.0, atol=1e-5)

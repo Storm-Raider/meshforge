@@ -38,3 +38,6 @@ class MeshParams:
     volume_algorithm: int = 1
 
     refinement_zones: list[RefinementZone] = field(default_factory=list)
+
+    # "tet" → C3D10 quadratic tetrahedra; "hex" → C3D8 linear hexahedra via barycentric subdivision
+    mesh_type: str = "tet"
