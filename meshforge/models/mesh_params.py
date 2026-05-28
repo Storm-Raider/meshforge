@@ -41,3 +41,7 @@ class MeshParams:
 
     # "tet" → C3D10 quadratic tetrahedra; "hex" → C3D8 linear hexahedra via barycentric subdivision
     mesh_type: str = "tet"
+
+    # Gmsh optimization passes applied after volume meshing (before setOrder).
+    # 0 = no smoothing. Uses Gmsh default optimizer (Laplacian + gradient descent).
+    smooth_iter: int = 0

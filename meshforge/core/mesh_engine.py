@@ -57,6 +57,8 @@ class MeshEngine:
 
             self._set_options(default_element_size)
             gmsh.model.mesh.generate(3)
+            if self._params.smooth_iter > 0:
+                gmsh.model.mesh.optimize("", niter=self._params.smooth_iter)
             if self._params.mesh_type != "hex":
                 gmsh.model.mesh.setOrder(2)
             return self._extract_mesh_data()
@@ -96,6 +98,8 @@ class MeshEngine:
             self._load_shape(geo)
             self._set_options(geo.default_element_size())
             gmsh.model.mesh.generate(3)
+            if self._params.smooth_iter > 0:
+                gmsh.model.mesh.optimize("", niter=self._params.smooth_iter)
             if self._params.mesh_type != "hex":
                 gmsh.model.mesh.setOrder(2)
             return self._extract_mesh_data()

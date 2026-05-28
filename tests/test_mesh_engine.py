@@ -124,3 +124,20 @@ class TestMeshEngineWithFixture:
         result = MeshEngine(params=params).mesh(bracket_geo)
         assert result.connectivity.min() >= 0
         assert result.connectivity.max() < result.node_count
+
+    def test_tet_smoothing_produces_valid_mesh(self, bracket_geo):
+        from meshforge.models.mesh_params import MeshParams
+        from meshforge.core.mesh_engine import VTK_QUADRATIC_TETRA
+        params = MeshParams(size_factor=2.0, smooth_iter=3)
+        result = MeshEngine(params=params).mesh(bracket_geo)
+        assert result.element_count > 0
+        assert np.all(result.element_types == VTK_QUADRATIC_TETRA)
+        assert result.connectivity.min() >= 0
+
+    def test_smoothing_zero_is_noop(self, bracket_geo):
+        from meshforge.models.mesh_params import MeshParams
+        params_base = MeshParams(size_factor=2.0, smooth_iter=0)
+        params_smooth = MeshParams(size_factor=2.0, smooth_iter=0)
+        r1 = MeshEngine(params=params_base).mesh(bracket_geo)
+        r2 = MeshEngine(params=params_smooth).mesh(bracket_geo)
+        assert r1.element_count == r2.element_count

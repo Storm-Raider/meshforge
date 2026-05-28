@@ -133,6 +133,7 @@ class MeshPanel(QWidget):
             volume_algorithm=_VOLUME_ALGOS[self._vol_combo.currentIndex()][1],
             refinement_zones=[row.get_zone() for row in self._zone_rows],
             mesh_type=_MESH_TYPES[self._mesh_type_combo.currentIndex()][1],
+            smooth_iter=self._smooth_spin.value(),
         )
 
     def set_geometry_defaults(self, target_size: float) -> None:
@@ -277,6 +278,21 @@ class MeshPanel(QWidget):
             "Hex (C3D8): linear hexahedra via barycentric subdivision — ~4x element count."
         )
         layout.addWidget(self._mesh_type_combo)
+
+        # Smoothing passes
+        smooth_row = QHBoxLayout()
+        smooth_row.addWidget(self._make_label("Smoothing passes"))
+        self._smooth_spin = QSpinBox()
+        self._smooth_spin.setRange(0, 10)
+        self._smooth_spin.setValue(0)
+        self._smooth_spin.setFixedWidth(58)
+        self._smooth_spin.setToolTip(
+            "Gmsh optimizer passes applied after volume meshing.\n"
+            "0 = off. 3–5 recommended for tet meshes with poor-quality elements.\n"
+            "Uses Laplacian + gradient descent — safe for both Tet and Hex."
+        )
+        smooth_row.addWidget(self._smooth_spin)
+        layout.addLayout(smooth_row)
 
         # Refinement Zones
         zones_group = QGroupBox("Refinement Zones")
