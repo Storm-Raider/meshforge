@@ -16,6 +16,7 @@ from meshforge.models.mesh_data import MeshData
 from meshforge.workers.import_worker import ImportWorker
 from meshforge.workers.mesh_worker import MeshWorker
 from meshforge.workers.quality_worker import QualityWorker
+from meshforge.workers.surface_preview_worker import SurfacePreviewWorker
 from meshforge.export.inp_exporter import InpExporter
 from meshforge.export.nas_exporter import NasExporter
 from meshforge.core.quality_engine import QualityEngine
@@ -53,6 +54,7 @@ class MainWindow(QMainWindow):
         self._import_worker: ImportWorker | None = None
         self._mesh_worker: MeshWorker | None = None
         self._quality_worker: QualityWorker | None = None
+        self._preview_worker: SurfacePreviewWorker | None = None
         self._current_file: str = ""
 
         self._build_ui()
@@ -82,6 +84,7 @@ class MainWindow(QMainWindow):
         self._model_tree = ModelTree()
         self._mesh_panel = MeshPanel()
         self._mesh_panel.remesh_requested.connect(self._on_remesh)
+        self._mesh_panel.preview_requested.connect(self._on_preview)
         left_layout.addWidget(self._model_tree, stretch=1)
         left_layout.addWidget(self._mesh_panel, stretch=0)
         splitter.addWidget(left_panel)
@@ -191,6 +194,8 @@ class MainWindow(QMainWindow):
         self._sample_btn.setVisible(state == _EMPTY)
         self._export_action.setEnabled(state in (_SUCCESS, _PARTIAL))
         self._mesh_panel.set_enabled(state in (_SUCCESS, _PARTIAL, _ERROR))
+        # Preview button is controlled separately via set_enabled; keep it in sync
+        # with mesh panel but also disabled during loading
 
         if state == _EMPTY:
             self._status_bar.showMessage("Drop a STEP file to begin, or click 'Try with sample geometry'.")
@@ -291,6 +296,35 @@ class MainWindow(QMainWindow):
         self._quality_panel.set_empty()
         self._vtk_viewer.show_empty_state()
         self._start_mesh(self._geo)
+
+    def _on_preview(self) -> None:
+        if self._geo is None or self._state not in (_SUCCESS, _PARTIAL, _ERROR):
+            return
+        if self._state == _LOADING:
+            return
+        self._mesh_panel.set_enabled(False)
+        self._status_bar.showMessage("Generating surface preview…")
+        self._progress_bar.show()
+        self._preview_worker = SurfacePreviewWorker(
+            self._geo, params=self._mesh_panel.get_params(), parent=self
+        )
+        self._preview_worker.complete.connect(self._on_preview_complete)
+        self._preview_worker.failed.connect(self._on_preview_failed)
+        self._preview_worker.start()
+
+    def _on_preview_complete(self, polydata, tri_count: int, node_count: int) -> None:
+        self._progress_bar.hide()
+        self._mesh_panel.set_enabled(True)
+        self._vtk_viewer.display_surface_preview(polydata, tri_count, node_count)
+        msg = f"Surface preview: {tri_count:,} triangles, {node_count:,} nodes"
+        self._status_bar.showMessage(msg)
+        self._log_panel.append(msg)
+
+    def _on_preview_failed(self, error: str) -> None:
+        self._progress_bar.hide()
+        self._mesh_panel.set_enabled(True)
+        self._status_bar.showMessage(f"Preview failed: {error}")
+        self._log_panel.append(f"Surface preview failed: {error}", "error")
 
     def _on_import_failed(self, error: str) -> None:
         QMessageBox.critical(self, "Import Failed", error)

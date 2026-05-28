@@ -142,13 +142,38 @@ class VtkViewer(QWidget):
         self._grid = grid
         self._isolate_threshold.SetInputData(grid)
 
-        # Reset to normal view; isolate toggle restores itself via set_isolate_failures
+        self._actor.GetProperty().EdgeVisibilityOff()
+        self._mapper.ScalarVisibilityOn()
         self._mapper.SetInputData(surface_polydata)
         self._mapper.SetScalarRange(0.0, 1.0)
         self._lut.SetTableRange(0.0, 1.0)
         self._actor.SetVisibility(True)
         self._isolate_actor.SetVisibility(False)
         self._scalar_bar.SetVisibility(True)
+        self._renderer.ResetCamera()
+
+        self._empty_label.hide()
+        self._vtk_widget.GetRenderWindow().Render()
+
+    def display_surface_preview(self, polydata, tri_count: int, node_count: int) -> None:
+        """Display a 2D surface mesh preview with flat colour and edge lines.
+
+        No quality coloring — shows mesh density so the user can validate size
+        factors and refinement zones before committing to a full 3D volume mesh.
+        """
+        self._grid = None
+        self._mapper.ScalarVisibilityOff()
+        self._mapper.SetInputData(polydata)
+
+        prop = self._actor.GetProperty()
+        prop.SetColor(0.37, 0.56, 0.75)    # steel blue face colour
+        prop.EdgeVisibilityOn()
+        prop.SetEdgeColor(0.18, 0.28, 0.38)
+        prop.SetLineWidth(0.8)
+
+        self._actor.SetVisibility(True)
+        self._isolate_actor.SetVisibility(False)
+        self._scalar_bar.SetVisibility(False)
         self._renderer.ResetCamera()
 
         self._empty_label.hide()

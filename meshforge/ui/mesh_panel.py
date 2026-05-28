@@ -109,6 +109,7 @@ class MeshPanel(QWidget):
     """
 
     remesh_requested = pyqtSignal()
+    preview_requested = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -159,6 +160,7 @@ class MeshPanel(QWidget):
 
     def set_enabled(self, enabled: bool) -> None:
         self._remesh_btn.setEnabled(enabled)
+        self._preview_btn.setEnabled(enabled)
 
     # ------------------------------------------------------------------
     # Construction
@@ -344,10 +346,21 @@ class MeshPanel(QWidget):
 
         layout.addWidget(zones_group)
 
-        # Re-mesh button
+        # Preview surface + Re-mesh buttons
+        btn_row = QHBoxLayout()
+        self._preview_btn = QPushButton("Preview Surface")
+        self._preview_btn.setToolTip(
+            "Generate and display the 2D surface mesh only (seconds).\n"
+            "Use this to validate element size and refinement zones\n"
+            "before running the full 3D volume mesh."
+        )
+        self._preview_btn.clicked.connect(self.preview_requested)
+        btn_row.addWidget(self._preview_btn)
+
         self._remesh_btn = QPushButton("Re-mesh")
         self._remesh_btn.clicked.connect(self.remesh_requested)
-        layout.addWidget(self._remesh_btn)
+        btn_row.addWidget(self._remesh_btn)
+        layout.addLayout(btn_row)
 
         layout.addStretch()
 

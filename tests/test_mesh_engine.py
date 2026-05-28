@@ -164,3 +164,32 @@ class TestMeshEngineWithFixture:
         result = MeshEngine(params=params).mesh(bracket_geo)
         assert result.connectivity.min() >= 0
         assert result.connectivity.max() < result.node_count
+
+    def test_surface_mesh_returns_triangles(self, bracket_geo):
+        from meshforge.models.mesh_data import MeshData
+        from meshforge.models.mesh_params import MeshParams
+        params = MeshParams(size_factor=2.0)
+        result = MeshEngine(params=params).surface_mesh(bracket_geo)
+        assert isinstance(result, MeshData)
+        assert result.element_count > 0
+        # Surface mesh contains triangles (VTK 5) and/or quads (VTK 9) only
+        assert set(result.element_types.tolist()).issubset({5, 9})
+
+    def test_surface_mesh_node_indices_valid(self, bracket_geo):
+        from meshforge.models.mesh_params import MeshParams
+        params = MeshParams(size_factor=2.0)
+        result = MeshEngine(params=params).surface_mesh(bracket_geo)
+        assert result.connectivity.min() >= 0
+        assert result.connectivity.max() < result.node_count
+
+    def test_surface_mesh_faster_than_volume(self, bracket_geo):
+        import time
+        from meshforge.models.mesh_params import MeshParams
+        params = MeshParams(size_factor=1.0)
+        t0 = time.monotonic()
+        MeshEngine(params=params).surface_mesh(bracket_geo)
+        surf_time = time.monotonic() - t0
+        t0 = time.monotonic()
+        MeshEngine(params=params).mesh(bracket_geo)
+        vol_time = time.monotonic() - t0
+        assert surf_time < vol_time
